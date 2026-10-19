@@ -10,8 +10,8 @@ export class MasterplanScene {
   constructor(container) {
     this.container = container;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x161a1f);
-    this.scene.fog = new THREE.FogExp2(0x161a1f, 0.007);
+    this.scene.background = new THREE.Color(0xdce5ee);
+    this.scene.fog = new THREE.Fog(0xdce5ee, 180, 520);
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -19,7 +19,7 @@ export class MasterplanScene {
       0.5,
       1000
     );
-    this.camera.position.set(40, 26, 36);
+    this.camera.position.set(34, 20, 30);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
@@ -27,7 +27,7 @@ export class MasterplanScene {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.35;
     container.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -36,7 +36,7 @@ export class MasterplanScene {
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03; // don't go below ground
     this.controls.minDistance = 5;
     this.controls.maxDistance = 240;
-    this.controls.target.set(16, 4.0, 2);
+    this.controls.target.set(16, 4.2, 2);
 
     this.materials = new MaterialLibrary(this.renderer);
     this.materials.initAll();
@@ -54,13 +54,13 @@ export class MasterplanScene {
   }
 
   setupLighting() {
-    // Ambient / Skylight
-    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x223344, 0.85);
+    // Ambient / Skylight dome illumination
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc8d6e5, 1.25);
     this.scene.add(hemiLight);
 
-    // Main Sunlight
-    const sunLight = new THREE.DirectionalLight(0xfffaed, 2.1);
-    sunLight.position.set(65, 80, 45);
+    // Main Sunlight (Bright Bogotá daylight with crisp shadows)
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 2.8);
+    sunLight.position.set(65, 85, 45);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
@@ -74,8 +74,8 @@ export class MasterplanScene {
     this.scene.add(sunLight);
 
     // Warm bounce fill light
-    const fillLight = new THREE.DirectionalLight(0xffeedd, 0.65);
-    fillLight.position.set(-50, 30, -40);
+    const fillLight = new THREE.DirectionalLight(0xe8f0fa, 0.75);
+    fillLight.position.set(-50, 40, -40);
     this.scene.add(fillLight);
   }
 
@@ -201,6 +201,8 @@ export class MasterplanScene {
       // Cutaway: hide upper floors and exterior shell of Piso 2
       this.buildingBuilder.upperBuildingGroup.visible = false;
       this.buildingBuilder.exteriorShellPiso2.visible = false;
+      gsap.to(this.camera.position, { x: 32, y: 19, z: 28, duration: 1.2, ease: 'power2.inOut' });
+      gsap.to(this.controls.target, { x: 16, y: 4.2, z: 2, duration: 1.2, ease: 'power2.inOut' });
     } else if (mode === 'top') {
       this.buildingBuilder.upperBuildingGroup.visible = false;
       this.buildingBuilder.exteriorShellPiso2.visible = false;
@@ -210,6 +212,8 @@ export class MasterplanScene {
       // Full exterior 6-story hotel
       this.buildingBuilder.upperBuildingGroup.visible = true;
       this.buildingBuilder.exteriorShellPiso2.visible = true;
+      gsap.to(this.camera.position, { x: 48, y: 30, z: 44, duration: 1.2, ease: 'power2.inOut' });
+      gsap.to(this.controls.target, { x: 16, y: 6.0, z: 2, duration: 1.2, ease: 'power2.inOut' });
     }
   }
 

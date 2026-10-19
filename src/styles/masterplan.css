@@ -205,8 +205,8 @@ html, body {
    ========================================================================== */
 .left-sidebar-wrapper {
   position: absolute;
-  top: 52px;
-  left: 14px;
+  top: 14px;
+  left: 16px;
   bottom: 64px;
   width: 316px;
   z-index: 25;
@@ -222,7 +222,7 @@ html, body {
 .left-sidebar {
   width: 316px;
   height: 100%;
-  max-height: 780px;
+  max-height: 840px;
   background: rgba(20, 23, 28, 0.92);
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);

@@ -86,13 +86,12 @@ export class HotelBuildingBuilder {
 
   buildUrbanContext(catastroBuildings = [], urbanNetwork = {}) {
     const roofSatMat = this.materials.get('ROOF_SATELLITE');
-    const facadeGlassMat = this.materials.get('FACADE_GLASS_TOWER');
-    const facadeBrickMat = this.materials.get('FACADE_BRICK_GRID');
-    const facadeStoneMat = this.materials.get('FACADE_STONE_GRID');
+    const facadeBrickMat = this.materials.get('BRICK_FACADE');
+    const contextWhiteMat = this.materials.get('CONTEXT_WHITE');
     const edgeMat = new THREE.LineBasicMaterial({
       color: 0xffffff,
       transparent: true,
-      opacity: 0.3
+      opacity: 0.65
     });
 
     const ORTHO_X_MIN = -380.03;
@@ -114,7 +113,7 @@ export class HotelBuildingBuilder {
     ground.receiveShadow = true;
     this.contextGroup.add(ground);
 
-    // 2. Real Bogotá Catastro Buildings with Satellite Roofs & Architectural Facades
+    // 2. Real Bogotá Catastro Buildings: Pure Frosted Architectural White Volumes with Crisp White Edges
     if (Array.isArray(catastroBuildings) && catastroBuildings.length > 0) {
       for (let i = 0; i < catastroBuildings.length; i++) {
         const b = catastroBuildings[i];
@@ -144,26 +143,15 @@ export class HotelBuildingBuilder {
             mesh.receiveShadow = true;
             this.upperBuildingGroup.add(mesh);
           } else {
-            // Context buildings: Select facade texture based on height and character
-            let sideMat;
-            if (height >= 18.0) {
-              sideMat = facadeGlassMat; // Tall towers: Glass curtain wall
-            } else if (height >= 9.0 || (i % 3 === 0)) {
-              sideMat = facadeBrickMat; // Mid-rise: Bogotá red masonry & windows
-            } else {
-              sideMat = facadeStoneMat; // Low-rise: Contemporary stone/concrete
-            }
-
-            const mesh = new THREE.Mesh(geo, [roofSatMat, sideMat]);
+            // Context buildings: pure frosted architectural white volumes with white wireframe edges
+            const mesh = new THREE.Mesh(geo, contextWhiteMat);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             this.contextGroup.add(mesh);
 
-            // Subtle crisp architectural edge lines
-            if (height > 6.0) {
-              const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat);
-              this.contextGroup.add(edges);
-            }
+            // Crisp white architectural edges
+            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), edgeMat);
+            this.contextGroup.add(edges);
           }
         } catch (e) {
           // Skip invalid polygon
@@ -172,10 +160,10 @@ export class HotelBuildingBuilder {
     }
 
     // 3. Official Bogotá Road Network (Calzadas, Andenes, Separadores, Ciclorrutas)
-    const calzadaMat = new THREE.MeshStandardMaterial({ color: 0x1f2228, roughness: 0.88 });
-    const andenMat = new THREE.MeshStandardMaterial({ color: 0xbbb5aa, roughness: 0.72 });
-    const alamedaMat = new THREE.MeshStandardMaterial({ color: 0x3d6635, roughness: 0.86 });
-    const cicloMat = new THREE.MeshStandardMaterial({ color: 0x9b3a2a, roughness: 0.78 }); // Red bike path
+    const calzadaMat = this.materials.get('ROAD_ASPHALT');
+    const andenMat = this.materials.get('SIDEWALK_PAVING');
+    const alamedaMat = this.materials.get('TURF_GRASS');
+    const cicloMat = this.materials.get('BIKEWAY_BLUE');
 
     // A. Calzadas (Vehicular Roadways, Y = 0 to 0.04m)
     for (const poly of (urbanNetwork.calzadas || [])) {
@@ -343,27 +331,27 @@ export class HotelBuildingBuilder {
   buildRealisticTrees(treePoints = []) {
     const treeGroup = new THREE.Group();
     const trunkMat = new THREE.MeshStandardMaterial({
-      color: 0x33281d,
-      roughness: 0.94,
+      color: 0x382c20,
+      roughness: 0.92,
       metalness: 0.02
     });
 
-    // 3 organic foliage materials for rich layered shading
-    const foliageDark = new THREE.MeshStandardMaterial({
-      color: 0x244222,
-      roughness: 0.88,
-      metalness: 0.0
-    });
-    const foliageMid = new THREE.MeshStandardMaterial({
-      color: 0x345c2c,
-      roughness: 0.85,
-      metalness: 0.0
-    });
-    const foliageLight = new THREE.MeshStandardMaterial({
-      color: 0x477839,
-      roughness: 0.82,
-      metalness: 0.0
-    });
+    const speciesMaterials = [
+      this.materials.get('TREE_ROBLE'),
+      this.materials.get('TREE_CHICALA'),
+      this.materials.get('TREE_SAUCO'),
+      this.materials.get('TREE_FLOWER_YELLOW')
+    ];
+
+    const shadowMat = this.materials.get('TREE_SHADOW');
+
+    // Shared smooth rounded geometries for high-performance rendering of 500+ trees
+    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.34, 2.6, 8);
+    const branchGeo = new THREE.CylinderGeometry(0.08, 0.15, 1.5, 6);
+    // Detail level 2 for soft rounded organic canopy look
+    const canopyCenterGeo = new THREE.IcosahedronGeometry(1.6, 2);
+    const canopyLobeGeo = new THREE.IcosahedronGeometry(1.15, 2);
+    const shadowGeo = new THREE.PlaneGeometry(6.2, 6.2);
 
     const pts = (Array.isArray(treePoints) && treePoints.length > 0)
       ? treePoints
@@ -373,51 +361,80 @@ export class HotelBuildingBuilder {
       const [tx, tz] = pts[i];
       const tree = new THREE.Group();
 
-      // Natural variation per tree based on coordinates
+      // Deterministic natural variation per tree
       const hash = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453);
       const scale = 0.85 + (hash % 1) * 0.45;
       const rot = (hash % 6.28);
 
-      // 1. Tapered Trunk
-      const trunkH = 2.4 * scale;
-      const trunkGeo = new THREE.CylinderGeometry(0.14 * scale, 0.26 * scale, trunkH, 8);
+      // Distribute species: Roble 40%, Chicalá 30%, Sauco 20%, Guayacán Amarillo 10%
+      let mat;
+      const spVal = (hash * 100) % 100;
+      if (spVal < 40) {
+        mat = speciesMaterials[0] || speciesMaterials[1];
+      } else if (spVal < 70) {
+        mat = speciesMaterials[1];
+      } else if (spVal < 90) {
+        mat = speciesMaterials[2] || speciesMaterials[1];
+      } else {
+        mat = speciesMaterials[3] || speciesMaterials[1];
+      }
+
+      // 1. Soft radial ground contact shadow decal (Crucial for aerial realism)
+      if (shadowMat) {
+        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.set(0, 0.02, 0);
+        shadow.scale.set(scale, scale, 1);
+        tree.add(shadow);
+      }
+
+      // 2. Trunk & Structural Branches
+      const trunkH = 2.3 * scale;
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.y = trunkH / 2;
+      trunk.scale.set(scale, scale, scale);
       trunk.castShadow = true;
       tree.add(trunk);
 
-      // 2. Outward Branch Limbs
-      const branchGeo = new THREE.CylinderGeometry(0.08 * scale, 0.12 * scale, 1.4 * scale, 6);
       const b1 = new THREE.Mesh(branchGeo, trunkMat);
-      b1.position.set(0.3 * scale, trunkH * 0.85, 0.2 * scale);
+      b1.position.set(0.32 * scale, trunkH * 0.85, 0.22 * scale);
       b1.rotation.set(0.4, 0.2, -0.6);
+      b1.scale.set(scale, scale, scale);
+
       const b2 = new THREE.Mesh(branchGeo, trunkMat);
-      b2.position.set(-0.25 * scale, trunkH * 0.9, -0.2 * scale);
+      b2.position.set(-0.28 * scale, trunkH * 0.9, -0.22 * scale);
       b2.rotation.set(-0.5, 0.3, 0.5);
+      b2.scale.set(scale, scale, scale);
       tree.add(b1, b2);
 
-      // 3. Volumetric Organic Foliage Clusters (Layered tufts creating real architectural tree depth)
-      const foliageGroup = new THREE.Group();
-      const clusterPositions = [
-        [0, trunkH + 1.2 * scale, 0, 1.4 * scale, foliageMid],
-        [0.55 * scale, trunkH + 0.8 * scale, 0.4 * scale, 1.05 * scale, foliageDark],
-        [-0.5 * scale, trunkH + 0.9 * scale, -0.35 * scale, 1.1 * scale, foliageDark],
-        [0.35 * scale, trunkH + 1.6 * scale, -0.25 * scale, 0.95 * scale, foliageLight],
-        [-0.3 * scale, trunkH + 1.7 * scale, 0.3 * scale, 0.9 * scale, foliageLight],
-        [0, trunkH + 2.1 * scale, 0, 0.8 * scale, foliageLight]
+      // 3. Volumetric Botanical Foliage (Cloud canopy with central buoyant crown + organic lobes)
+      const foliage = new THREE.Group();
+
+      const centerCrown = new THREE.Mesh(canopyCenterGeo, mat);
+      centerCrown.position.set(0, trunkH + 1.35 * scale, 0);
+      centerCrown.scale.set(scale * 1.1, scale * 0.95, scale * 1.1);
+      centerCrown.castShadow = true;
+      centerCrown.receiveShadow = true;
+      foliage.add(centerCrown);
+
+      const lobeOffsets = [
+        [0.85 * scale, trunkH + 1.0 * scale, 0.65 * scale, 0.95],
+        [-0.8 * scale, trunkH + 1.05 * scale, -0.6 * scale, 0.92],
+        [0.65 * scale, trunkH + 1.5 * scale, -0.75 * scale, 0.88],
+        [-0.75 * scale, trunkH + 1.45 * scale, 0.7 * scale, 0.9]
       ];
 
-      for (const [cx, cy, cz, rad, mat] of clusterPositions) {
-        const clusterGeo = new THREE.IcosahedronGeometry(rad, 1);
-        const cluster = new THREE.Mesh(clusterGeo, mat);
-        cluster.position.set(cx, cy, cz);
-        cluster.castShadow = true;
-        cluster.receiveShadow = true;
-        foliageGroup.add(cluster);
+      for (const [lx, ly, lz, lobeScale] of lobeOffsets) {
+        const lobe = new THREE.Mesh(canopyLobeGeo, mat);
+        lobe.position.set(lx, ly, lz);
+        lobe.scale.set(scale * lobeScale, scale * lobeScale, scale * lobeScale);
+        lobe.castShadow = true;
+        lobe.receiveShadow = true;
+        foliage.add(lobe);
       }
 
-      tree.add(foliageGroup);
-      tree.position.set(tx, 0.12, tz);
+      tree.add(foliage);
+      tree.position.set(tx, 0.08, tz);
       tree.rotation.y = rot;
       treeGroup.add(tree);
     }

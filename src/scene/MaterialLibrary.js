@@ -280,57 +280,153 @@ export class MaterialLibrary {
       metalness: 0.18
     }));
 
-    // 12. Remote Sensing & Masterplan Satellite Roof Material (Alejandro Quinto style)
-    const satelliteMap = this.getTexture('./assets/textures/satellite_ortho_la_fontana.jpg', 1, 1, true);
-    this.materials.set('ROOF_SATELLITE', new THREE.MeshStandardMaterial({
-      map: satelliteMap,
+    // 12. Clean Architectural White Volume for Context Buildings (As requested: "mejor deja todos los volumenes blancos")
+    this.materials.set('CONTEXT_WHITE', new THREE.MeshStandardMaterial({
+      color: 0xf4f7fa,
+      roughness: 0.3,
+      metalness: 0.04,
+      transparent: true,
+      opacity: 0.92
+    }));
+
+    // 13. Realistic Botanical Trees matching Reference Image (3 species + leaf textures + ground shadows)
+    try {
+      const leafCanvas = this.createBotanicalLeafCanvas();
+      const leafTex = new THREE.CanvasTexture(leafCanvas);
+      leafTex.wrapS = THREE.RepeatWrapping;
+      leafTex.wrapT = THREE.RepeatWrapping;
+      leafTex.repeat.set(1.5, 1.5);
+
+      // Species A: Sabana Oak (Roble) - Deep rich emerald green
+      this.materials.set('TREE_ROBLE', new THREE.MeshStandardMaterial({
+        map: leafTex,
+        bumpMap: leafTex,
+        bumpScale: 0.03,
+        color: 0x2e5c26,
+        roughness: 0.82,
+        metalness: 0.02
+      }));
+
+      // Species B: Chicalá / Guayacán - Fresh vibrant yellow-green highlight
+      this.materials.set('TREE_CHICALA', new THREE.MeshStandardMaterial({
+        map: leafTex,
+        bumpMap: leafTex,
+        bumpScale: 0.03,
+        color: 0x569632,
+        roughness: 0.78,
+        metalness: 0.02
+      }));
+
+      // Species C: Sauco / Urapán - Warm mid-green canopy
+      this.materials.set('TREE_SAUCO', new THREE.MeshStandardMaterial({
+        map: leafTex,
+        bumpMap: leafTex,
+        bumpScale: 0.03,
+        color: 0x3d742e,
+        roughness: 0.8,
+        metalness: 0.02
+      }));
+
+      // Species D: Guayacán Amarillo en flor - Golden yellow accents matching reference photo
+      this.materials.set('TREE_FLOWER_YELLOW', new THREE.MeshStandardMaterial({
+        map: leafTex,
+        bumpMap: leafTex,
+        bumpScale: 0.03,
+        color: 0xdfa622,
+        roughness: 0.8,
+        metalness: 0.02
+      }));
+
+      // Soft circular contact shadow decal on the ground under each tree
+      const shadowCanvas = this.createTreeShadowCanvas();
+      const shadowTex = new THREE.CanvasTexture(shadowCanvas);
+      this.materials.set('TREE_SHADOW', new THREE.MeshBasicMaterial({
+        map: shadowTex,
+        transparent: true,
+        opacity: 0.58,
+        depthWrite: false
+      }));
+    } catch (e) {
+      this.materials.set('TREE_ROBLE', new THREE.MeshStandardMaterial({ color: 0x2e5c26, roughness: 0.8 }));
+      this.materials.set('TREE_CHICALA', new THREE.MeshStandardMaterial({ color: 0x569632, roughness: 0.8 }));
+      this.materials.set('TREE_SAUCO', new THREE.MeshStandardMaterial({ color: 0x3d742e, roughness: 0.8 }));
+      this.materials.set('TREE_FLOWER_YELLOW', new THREE.MeshStandardMaterial({ color: 0xdfa622, roughness: 0.8 }));
+      this.materials.set('TREE_SHADOW', new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.35 }));
+    }
+
+    // 14. Bright Realistic Urban Materials (Matching Reference Image)
+    this.materials.set('ROAD_ASPHALT', new THREE.MeshStandardMaterial({
+      color: 0x3f444c,
       roughness: 0.82,
       metalness: 0.04
     }));
 
-    // 13. Realistic Architectural Facades for Context Buildings (No more plain white boxes)
-    try {
-      // A. Modern Glass Curtain Wall Tower
-      const glassCanvas = this.createGlassFacadeCanvas();
-      const glassTex = new THREE.CanvasTexture(glassCanvas);
-      glassTex.wrapS = THREE.RepeatWrapping;
-      glassTex.wrapT = THREE.RepeatWrapping;
-      glassTex.repeat.set(0.2, 0.3);
-      this.materials.set('FACADE_GLASS_TOWER', new THREE.MeshStandardMaterial({
-        map: glassTex,
-        roughness: 0.28,
-        metalness: 0.5
-      }));
+    this.materials.set('SIDEWALK_PAVING', new THREE.MeshStandardMaterial({
+      color: 0xd2c5b2, // Warm architectural stone / sand tone
+      roughness: 0.72,
+      metalness: 0.02
+    }));
 
-      // B. Bogotá Brick & Masonry Facade with Window Grids
-      const brickCanvas = this.createBrickFacadeCanvas();
-      const brickTex = new THREE.CanvasTexture(brickCanvas);
-      brickTex.wrapS = THREE.RepeatWrapping;
-      brickTex.wrapT = THREE.RepeatWrapping;
-      brickTex.repeat.set(0.22, 0.32);
-      this.materials.set('FACADE_BRICK_GRID', new THREE.MeshStandardMaterial({
-        map: brickTex,
-        roughness: 0.75,
-        metalness: 0.05
-      }));
+    this.materials.set('BIKEWAY_BLUE', new THREE.MeshStandardMaterial({
+      color: 0x1c78b8, // Vibrant blue ribbon matching reference image
+      roughness: 0.65,
+      metalness: 0.08
+    }));
 
-      // C. Contemporary Stone / Concrete Punched Facade
-      const stoneCanvas = this.createStoneFacadeCanvas();
-      const stoneTex = new THREE.CanvasTexture(stoneCanvas);
-      stoneTex.wrapS = THREE.RepeatWrapping;
-      stoneTex.wrapT = THREE.RepeatWrapping;
-      stoneTex.repeat.set(0.22, 0.32);
-      this.materials.set('FACADE_STONE_GRID', new THREE.MeshStandardMaterial({
-        map: stoneTex,
-        roughness: 0.62,
-        metalness: 0.08
-      }));
-    } catch (e) {
-      // Fallback in headless environments
-      this.materials.set('FACADE_GLASS_TOWER', this.get('CONTEXT_ARCH'));
-      this.materials.set('FACADE_BRICK_GRID', this.get('BRICK_FACADE'));
-      this.materials.set('FACADE_STONE_GRID', this.get('REF28'));
+    this.materials.set('TURF_GRASS', new THREE.MeshStandardMaterial({
+      color: 0x487e35, // Lush vibrant lawn
+      roughness: 0.88,
+      metalness: 0.0
+    }));
+
+    this.materials.set('PEDESTRIAN_PLAZA', new THREE.MeshStandardMaterial({
+      color: 0xd9ccba,
+      roughness: 0.76,
+      metalness: 0.03
+    }));
+  }
+
+  createBotanicalLeafCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+
+    // Rich organic base tone
+    ctx.fillStyle = '#2c5924';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // Render 1500 botanical leaf clusters with varied tones
+    const greens = ['#204419', '#2a5522', '#386a2d', '#487f37', '#599743', '#6ea84f', '#81bd5a'];
+
+    for (let i = 0; i < 1500; i++) {
+      const x = Math.random() * 512;
+      const y = Math.random() * 512;
+      const rx = 3 + Math.random() * 7;
+      const ry = 2 + Math.random() * 4;
+      const angle = Math.random() * Math.PI;
+
+      ctx.fillStyle = greens[Math.floor(Math.random() * greens.length)];
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2);
+      ctx.fill();
     }
+    return c;
+  }
+
+  createTreeShadowCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 256;
+    const ctx = c.getContext('2d');
+    const grad = ctx.createRadialGradient(128, 128, 20, 128, 128, 126);
+    grad.addColorStop(0, 'rgba(15, 20, 25, 0.75)');
+    grad.addColorStop(0.5, 'rgba(20, 25, 30, 0.45)');
+    grad.addColorStop(0.85, 'rgba(25, 30, 35, 0.15)');
+    grad.addColorStop(1, 'rgba(30, 35, 40, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 256, 256);
+    return c;
   }
 
   createGlassFacadeCanvas() {
