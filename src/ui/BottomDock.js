@@ -12,12 +12,12 @@ export class BottomDock {
     this.container.innerHTML = `
       <div class="dock-collapse-handle" id="btn-toggle-dock">▼</div>
       <div class="bottom-dock">
-        <!-- Brand Badges -->
-        <div class="dock-brand-card">
-          <div class="brand-badge-red">HOTEL<br/>ESTELAR</div>
-          <div class="brand-badge-dark">
-            <strong>LA FONTANA</strong>
-            <span>BOGOTÁ · PISO 2</span>
+        <!-- BACO STUDIO Brand Badge -->
+        <div class="baco-dock-brand">
+          <img src="./assets/branding/baco-studio-logo.png" alt="BACO STUDIO" class="baco-dock-avatar" />
+          <div class="baco-dock-meta">
+            <strong class="baco-dock-name">BACO STUDIO</strong>
+            <span class="baco-dock-sub">HOTEL LA FONTANA · PISO 2</span>
           </div>
         </div>
 
@@ -75,11 +75,13 @@ export class BottomDock {
     });
 
     const collapseBtn = this.container.querySelector('#btn-toggle-dock');
-    collapseBtn.onclick = () => {
-      const dock = this.container.querySelector('.bottom-dock');
-      const isHidden = dock.style.display === 'none';
-      dock.style.display = isHidden ? 'flex' : 'none';
-      collapseBtn.textContent = isHidden ? '▼' : '▲';
-    };
+    if (collapseBtn) {
+      collapseBtn.onclick = () => {
+        const dock = this.container.querySelector('.bottom-dock');
+        const isHidden = dock.style.display === 'none';
+        dock.style.display = isHidden ? 'flex' : 'none';
+        collapseBtn.textContent = isHidden ? '▼' : '▲';
+      };
+    }
   }
 }

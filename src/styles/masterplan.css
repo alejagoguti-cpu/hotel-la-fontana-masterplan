@@ -57,8 +57,56 @@ html, body {
   cursor: grabbing;
 }
 
+/* Top Left Brand Badge (BACO STUDIO) */
+.top-left-brand {
+  position: absolute;
+  top: 14px;
+  left: 18px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(20, 23, 28, 0.88);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 16px 4px 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.top-baco-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #fff;
+  padding: 1.5px;
+  object-fit: contain;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.top-baco-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.top-baco-title {
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+}
+
+.top-baco-sub {
+  font-size: 9.5px;
+  color: var(--text-soft);
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
 /* ==========================================================================
-   Top Right Controls ( igual a Centrum: icono vista + Contáctanos + menú )
+   Top Right Controls
    ========================================================================== */
 .top-right-bar {
   position: absolute;
@@ -153,14 +201,14 @@ html, body {
 }
 
 /* ==========================================================================
-   Left Sidebar Filters ("Inmuebles" — exact Las Galias / Centrum layout)
+   Left Sidebar Filters (BACO STUDIO · Masterplan Architecture & Remodeling)
    ========================================================================== */
 .left-sidebar-wrapper {
   position: absolute;
   top: 52px;
-  left: 10px;
-  bottom: 62px;
-  width: 266px;
+  left: 14px;
+  bottom: 64px;
+  width: 316px;
   z-index: 25;
   display: flex;
   align-items: center;
@@ -168,22 +216,22 @@ html, body {
 }
 
 .left-sidebar-wrapper.collapsed {
-  transform: translateX(-268px);
+  transform: translateX(-336px);
 }
 
 .left-sidebar {
-  width: 266px;
+  width: 316px;
   height: 100%;
-  max-height: 760px;
-  background: var(--glass-bg);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border: 1px solid var(--glass-border);
-  border-radius: 18px;
-  padding: 18px 14px 16px;
+  max-height: 780px;
+  background: rgba(20, 23, 28, 0.92);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 16px 14px 14px;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
   position: relative;
   overflow: hidden;
 }
@@ -196,9 +244,9 @@ html, body {
   height: 26px;
   border-radius: 50%;
   border: none;
-  background: rgba(30, 30, 32, 0.65);
+  background: rgba(45, 48, 54, 0.65);
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -217,9 +265,9 @@ html, body {
   transform: translateY(-50%);
   width: 24px;
   height: 76px;
-  background: rgba(95, 98, 102, 0.72);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
+  background: rgba(70, 75, 82, 0.85);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-left: none;
   border-radius: 0 10px 10px 0;
   color: #fff;
@@ -231,29 +279,54 @@ html, body {
 }
 
 .sidebar-collapse-tab:hover {
-  background: rgba(120, 124, 128, 0.88);
+  background: rgba(100, 105, 115, 0.95);
 }
 
-.sidebar-header {
+/* BACO STUDIO Brand Header */
+.sidebar-brand-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 10px;
+}
+
+.baco-sidebar-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: #fff;
+  padding: 2px;
+  object-fit: contain;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  flex-shrink: 0;
+}
+
+.baco-brand-info {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
 }
 
-.sidebar-header-icon {
-  width: 42px;
-  height: 42px;
-  margin-bottom: 4px;
-  color: #fff;
+.baco-brand-name {
+  font-family: var(--font-main);
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: #ffffff;
 }
 
-.sidebar-title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  margin-bottom: 10px;
+.baco-brand-project {
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  color: var(--text-soft);
+  font-weight: 500;
+}
+
+.sidebar-header-controls {
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 12px;
 }
 
 .toggle-row {
@@ -261,7 +334,6 @@ html, body {
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding-left: 32px;
 }
 
 .umbra-switch {
@@ -364,41 +436,111 @@ html, body {
   border-radius: 3px;
 }
 
-.umbra-filter-btn {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: var(--btn-muted);
-  color: rgba(255, 255, 255, 0.78);
+/* BACO STUDIO Room Cards & Pill Buttons */
+.baco-pill-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.baco-pill-btn {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
   font-family: var(--font-main);
-  font-size: 12px;
-  font-weight: 400;
-  padding: 9px 10px;
-  border-radius: 9px;
+  font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.18s ease;
-  text-align: center;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.umbra-filter-btn:hover {
-  background: var(--btn-muted-hover);
+.baco-pill-btn:hover {
+  background: rgba(255, 255, 255, 0.14);
   color: #fff;
 }
 
-.umbra-filter-btn.active-gray {
-  background: var(--btn-active-gray);
+.baco-pill-btn.active {
+  background: rgba(255, 255, 255, 0.24);
   color: #fff;
-  font-weight: 500;
   border-color: rgba(255, 255, 255, 0.45);
 }
 
-.umbra-filter-btn.active-red {
+.baco-room-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.baco-room-stack::-webkit-scrollbar {
+  width: 3px;
+}
+
+.baco-room-stack::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 3px;
+}
+
+.baco-room-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.baco-room-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+  transform: translateX(2px);
+}
+
+.baco-room-card.active {
+  background: linear-gradient(135deg, rgba(216, 30, 40, 0.26), rgba(216, 30, 40, 0.08));
+  border: 1px solid rgba(216, 30, 40, 0.75);
+  box-shadow: 0 4px 14px rgba(216, 30, 40, 0.25);
+}
+
+.baco-room-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.baco-room-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.baco-room-type {
+  font-size: 11px;
+  color: var(--text-soft);
+  font-weight: 400;
+}
+
+.baco-room-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.09);
+  color: #e2e8f0;
+  white-space: nowrap;
+}
+
+.baco-room-card.active .baco-room-badge {
   background: var(--umbra-red);
-  color: #fff;
-  font-weight: 500;
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 4px 14px var(--umbra-red-glow);
+  color: #ffffff;
 }
 
 /* ==========================================================================
@@ -608,46 +750,44 @@ html, body {
   box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
 }
 
-.dock-brand-card {
-  background: rgba(242, 242, 244, 0.94);
-  border-radius: 10px;
-  padding: 6px 12px;
+.baco-dock-brand {
+  background: rgba(248, 248, 250, 0.96);
+  border-radius: 12px;
+  padding: 5px 14px 5px 8px;
   display: flex;
   align-items: center;
   gap: 10px;
   height: 54px;
 }
 
-.brand-badge-red {
-  background: var(--umbra-red);
-  color: #fff;
-  font-weight: 700;
-  font-size: 10px;
-  letter-spacing: 0.6px;
-  padding: 6px 7px;
-  border-radius: 4px;
-  text-align: center;
-  line-height: 1.1;
+.baco-dock-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  object-fit: contain;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  flex-shrink: 0;
 }
 
-.brand-badge-dark {
-  color: #1c1e22;
+.baco-dock-meta {
   display: flex;
   flex-direction: column;
-  justify-content: center;
 }
 
-.brand-badge-dark strong {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
+.baco-dock-name {
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #111;
 }
 
-.brand-badge-dark span {
-  font-size: 9.5px;
-  color: #555;
-  font-weight: 500;
+.baco-dock-sub {
+  font-size: 9px;
+  color: #666;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .dock-tab-btn {

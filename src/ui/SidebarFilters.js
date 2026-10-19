@@ -12,44 +12,44 @@ export class SidebarFilters {
       <div class="left-sidebar">
         <button class="sidebar-close-btn" id="btn-collapse-sidebar" title="Ocultar panel">✕</button>
         
-        <div class="sidebar-header">
-          <svg class="sidebar-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M3 21h18M5 21V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16M9 9h1M9 13h1M9 17h1M14 9h1M14 13h1M14 17h1"/>
-          </svg>
-          <div class="sidebar-title">Habitaciones</div>
+        <!-- BACO STUDIO Brand Header -->
+        <div class="sidebar-brand-header">
+          <img src="./assets/branding/baco-studio-logo.png" alt="BACO STUDIO" class="baco-sidebar-logo" />
+          <div class="baco-brand-info">
+            <div class="baco-brand-name">BACO STUDIO</div>
+            <div class="baco-brand-project">HOTEL LA FONTANA · PISO 2</div>
+          </div>
+        </div>
+
+        <div class="sidebar-header-controls">
           <div class="toggle-row">
             <div class="umbra-switch on" id="toggle-show-rooms">
               <div class="umbra-switch-knob"></div>
             </div>
-            <span class="toggle-label">Mostrar habitaciones</span>
+            <span class="toggle-label">Mostrar habitaciones 3D</span>
           </div>
         </div>
 
         <div class="sidebar-body">
-          <div class="filter-main-heading">
-            <span>FILTRAR POR ATRIBUTOS:</span>
-            <span>▼</span>
-          </div>
-
-          <!-- Sector / Ala -->
+          <!-- Sector / Ala Filter -->
           <div class="filter-section">
-            <div class="filter-section-label">Ala / Sector</div>
-            <div class="filter-stack" id="wing-filters">
+            <div class="filter-section-label">Filtrar por Sector</div>
+            <div class="baco-pill-stack" id="wing-filters">
               <!-- Rendered dynamically -->
             </div>
           </div>
 
-          <!-- Room list buttons -->
+          <!-- Room list cards -->
           <div class="filter-section">
-            <div class="filter-section-label">Habitaciones Piso 2</div>
-            <div class="filter-stack" id="room-list-buttons">
+            <div class="filter-section-label">Habitaciones Piso 2 (12 Suites)</div>
+            <div class="baco-room-stack" id="room-list-buttons">
               <!-- Rendered dynamically -->
             </div>
           </div>
 
-          <!-- Tipología -->
+          <!-- Typology Filter -->
           <div class="filter-section">
-            <div class="filter-section-label">Tipología</div>
+            <div class="filter-section-label">Tipologías</div>
             <div class="filter-grid-2" id="typology-filters">
               <!-- Rendered dynamically -->
             </div>
@@ -68,21 +68,23 @@ export class SidebarFilters {
 
   bindEvents() {
     const toggle = this.container.querySelector('#toggle-show-rooms');
-    toggle.addEventListener('click', () => {
-      const next = !store.state.showRoomsOverlay;
-      toggle.classList.toggle('on', next);
-      store.setState({ showRoomsOverlay: next });
-    });
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        const next = !store.state.showRoomsOverlay;
+        toggle.classList.toggle('on', next);
+        store.setState({ showRoomsOverlay: next });
+      });
+    }
 
     const collapseBtn = this.container.querySelector('#btn-collapse-sidebar');
     const collapseTab = this.container.querySelector('#sidebar-tab');
     const toggleCollapse = () => {
       this.container.classList.toggle('collapsed');
       const isCollapsed = this.container.classList.contains('collapsed');
-      collapseTab.textContent = isCollapsed ? '›' : '‹';
+      if (collapseTab) collapseTab.textContent = isCollapsed ? '›' : '‹';
     };
-    collapseBtn.addEventListener('click', toggleCollapse);
-    collapseTab.addEventListener('click', toggleCollapse);
+    if (collapseBtn) collapseBtn.addEventListener('click', toggleCollapse);
+    if (collapseTab) collapseTab.addEventListener('click', toggleCollapse);
   }
 
   render() {
@@ -92,55 +94,65 @@ export class SidebarFilters {
     // 1. Wings
     const wings = [...new Set(rooms.map(r => r.wing))];
     const wingContainer = this.container.querySelector('#wing-filters');
-    wingContainer.innerHTML = `
-      <button class="umbra-filter-btn ${!activeWing ? 'active-gray' : ''}" data-wing="">Todas las Alas</button>
-      ${wings.map(w => `
-        <button class="umbra-filter-btn ${activeWing === w ? 'active-gray' : ''}" data-wing="${w}">
-          ${w}
-        </button>
-      `).join('')}
-    `;
+    if (wingContainer) {
+      wingContainer.innerHTML = `
+        <button class="baco-pill-btn ${!activeWing ? 'active' : ''}" data-wing="">Todas las Alas</button>
+        ${wings.map(w => `
+          <button class="baco-pill-btn ${activeWing === w ? 'active' : ''}" data-wing="${w}">
+            ${w}
+          </button>
+        `).join('')}
+      `;
 
-    wingContainer.querySelectorAll('button').forEach(btn => {
-      btn.onclick = () => {
-        const w = btn.dataset.wing || null;
-        store.setState({ activeWing: w });
-      };
-    });
+      wingContainer.querySelectorAll('button').forEach(btn => {
+        btn.onclick = () => {
+          const w = btn.dataset.wing || null;
+          store.setState({ activeWing: w });
+        };
+      });
+    }
 
-    // 2. Room buttons
+    // 2. Room cards (Redesigned with comfortable breathing room, no cut-offs)
     const filtered = store.getFilteredRooms();
     const roomContainer = this.container.querySelector('#room-list-buttons');
-    roomContainer.innerHTML = filtered.map(r => `
-      <button class="umbra-filter-btn ${selectedRoomId === r.id ? 'active-red' : ''}" data-id="${r.id}">
-        Hab. ${r.number} · ${r.typology} (${r.areaPrivateM2} m²)
-      </button>
-    `).join('');
+    if (roomContainer) {
+      roomContainer.innerHTML = filtered.map(r => `
+        <div class="baco-room-card ${selectedRoomId === r.id ? 'active' : ''}" data-id="${r.id}">
+          <div class="baco-room-main">
+            <span class="baco-room-title">Hab. ${r.number}</span>
+            <span class="baco-room-type">${r.typology}</span>
+          </div>
+          <div class="baco-room-badge">${r.areaPrivateM2} m²</div>
+        </div>
+      `).join('');
 
-    roomContainer.querySelectorAll('button').forEach(btn => {
-      btn.onclick = () => {
-        const id = btn.dataset.id;
-        this.onSelectRoom(id);
-      };
-    });
+      roomContainer.querySelectorAll('.baco-room-card').forEach(card => {
+        card.onclick = () => {
+          const id = card.dataset.id;
+          this.onSelectRoom(id);
+        };
+      });
+    }
 
     // 3. Typologies
     const typologies = [...new Set(rooms.map(r => r.typology))];
     const typoContainer = this.container.querySelector('#typology-filters');
-    typoContainer.innerHTML = `
-      <button class="umbra-filter-btn ${!activeTypology ? 'active-gray' : ''}" data-typo="" style="grid-column: span 2">Todas</button>
-      ${typologies.map(t => `
-        <button class="umbra-filter-btn ${activeTypology === t ? 'active-gray' : ''}" data-typo="${t}">
-          ${t}
-        </button>
-      `).join('')}
-    `;
+    if (typoContainer) {
+      typoContainer.innerHTML = `
+        <button class="baco-pill-btn ${!activeTypology ? 'active' : ''}" data-typo="" style="grid-column: span 2">Todas</button>
+        ${typologies.map(t => `
+          <button class="baco-pill-btn ${activeTypology === t ? 'active' : ''}" data-typo="${t}">
+            ${t}
+          </button>
+        `).join('')}
+      `;
 
-    typoContainer.querySelectorAll('button').forEach(btn => {
-      btn.onclick = () => {
-        const t = btn.dataset.typo || null;
-        store.setState({ activeTypology: t });
-      };
-    });
+      typoContainer.querySelectorAll('button').forEach(btn => {
+        btn.onclick = () => {
+          const t = btn.dataset.typo || null;
+          store.setState({ activeTypology: t });
+        };
+      });
+    }
   }
 }
