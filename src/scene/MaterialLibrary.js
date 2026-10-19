@@ -289,50 +289,48 @@ export class MaterialLibrary {
       opacity: 0.92
     }));
 
-    // 13. Realistic Botanical Trees matching Reference Image (3 species + leaf textures + ground shadows)
+    // 13. Photorealistic Botanical Trees matching Reference Image (Alpha-tested leafy clusters + ground shadows)
     try {
-      const leafCanvas = this.createBotanicalLeafCanvas();
-      const leafTex = new THREE.CanvasTexture(leafCanvas);
-      leafTex.wrapS = THREE.RepeatWrapping;
-      leafTex.wrapT = THREE.RepeatWrapping;
-      leafTex.repeat.set(1.5, 1.5);
+      const leafTexRoble = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('roble'));
+      const leafTexChicala = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('chicala'));
+      const leafTexFlower = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('flower'));
 
-      // Species A: Sabana Oak (Roble) - Deep rich emerald green
+      // Species A: Sabana Oak (Roble) - Deep rich emerald foliage
       this.materials.set('TREE_ROBLE', new THREE.MeshStandardMaterial({
-        map: leafTex,
-        bumpMap: leafTex,
-        bumpScale: 0.03,
-        color: 0x2e5c26,
+        map: leafTexRoble,
+        alphaTest: 0.18,
+        transparent: true,
+        side: THREE.DoubleSide,
+        roughness: 0.85,
+        metalness: 0.02
+      }));
+
+      // Species B: Chicalá - Fresh vibrant sunny green foliage
+      this.materials.set('TREE_CHICALA', new THREE.MeshStandardMaterial({
+        map: leafTexChicala,
+        alphaTest: 0.18,
+        transparent: true,
+        side: THREE.DoubleSide,
         roughness: 0.82,
         metalness: 0.02
       }));
 
-      // Species B: Chicalá / Guayacán - Fresh vibrant yellow-green highlight
-      this.materials.set('TREE_CHICALA', new THREE.MeshStandardMaterial({
-        map: leafTex,
-        bumpMap: leafTex,
-        bumpScale: 0.03,
-        color: 0x569632,
-        roughness: 0.78,
-        metalness: 0.02
-      }));
-
-      // Species C: Sauco / Urapán - Warm mid-green canopy
+      // Species C: Sauco / Urapán - Warm mid-green foliage
       this.materials.set('TREE_SAUCO', new THREE.MeshStandardMaterial({
-        map: leafTex,
-        bumpMap: leafTex,
-        bumpScale: 0.03,
-        color: 0x3d742e,
-        roughness: 0.8,
+        map: leafTexRoble,
+        alphaTest: 0.18,
+        transparent: true,
+        side: THREE.DoubleSide,
+        roughness: 0.84,
         metalness: 0.02
       }));
 
-      // Species D: Guayacán Amarillo en flor - Golden yellow accents matching reference photo
+      // Species D: Guayacán Amarillo en flor - Golden yellow floral bursts matching reference photo
       this.materials.set('TREE_FLOWER_YELLOW', new THREE.MeshStandardMaterial({
-        map: leafTex,
-        bumpMap: leafTex,
-        bumpScale: 0.03,
-        color: 0xdfa622,
+        map: leafTexFlower,
+        alphaTest: 0.18,
+        transparent: true,
+        side: THREE.DoubleSide,
         roughness: 0.8,
         metalness: 0.02
       }));
@@ -343,7 +341,7 @@ export class MaterialLibrary {
       this.materials.set('TREE_SHADOW', new THREE.MeshBasicMaterial({
         map: shadowTex,
         transparent: true,
-        opacity: 0.58,
+        opacity: 0.65,
         depthWrite: false
       }));
     } catch (e) {
@@ -386,31 +384,72 @@ export class MaterialLibrary {
     }));
   }
 
-  createBotanicalLeafCanvas() {
+  createBotanicalLeafCanvas(species = 'roble') {
     const c = document.createElement('canvas');
     c.width = 512;
     c.height = 512;
     const ctx = c.getContext('2d');
 
-    // Rich organic base tone
-    ctx.fillStyle = '#2c5924';
-    ctx.fillRect(0, 0, 512, 512);
+    // 1. Transparent background so leaves have feathery alpha edges (NO SOLID SPHERES)
+    ctx.clearRect(0, 0, 512, 512);
 
-    // Render 1500 botanical leaf clusters with varied tones
-    const greens = ['#204419', '#2a5522', '#386a2d', '#487f37', '#599743', '#6ea84f', '#81bd5a'];
-
-    for (let i = 0; i < 1500; i++) {
-      const x = Math.random() * 512;
-      const y = Math.random() * 512;
-      const rx = 3 + Math.random() * 7;
-      const ry = 2 + Math.random() * 4;
-      const angle = Math.random() * Math.PI;
-
-      ctx.fillStyle = greens[Math.floor(Math.random() * greens.length)];
-      ctx.beginPath();
-      ctx.ellipse(x, y, rx, ry, angle, 0, Math.PI * 2);
-      ctx.fill();
+    let colors;
+    if (species === 'flower') {
+      // Golden yellow Guayacán blossoms with green leaf clusters
+      colors = ['#f5bf26', '#edaf15', '#fcd644', '#df9f12', '#ffe066', '#4a8e2e', '#367020'];
+    } else if (species === 'chicala') {
+      // Fresh bright green foliage
+      colors = ['#52a32c', '#67bf38', '#7ed647', '#3f8221', '#98e855', '#2c6116'];
+    } else {
+      // Rich deep emerald Sabana Oak
+      colors = ['#234a1a', '#2e5e23', '#3d782e', '#4c9138', '#1a3a13', '#5ea844'];
     }
+
+    // 2. Render dense sprays of botanical leaves across the canvas
+    const center = 256;
+    const sprays = 40;
+
+    for (let s = 0; s < sprays; s++) {
+      const sprayAngle = Math.random() * Math.PI * 2;
+      const sprayDist = 20 + Math.random() * 190;
+      const sx = center + Math.cos(sprayAngle) * sprayDist;
+      const sy = center + Math.sin(sprayAngle) * sprayDist;
+      const leafCount = 35 + Math.floor(Math.random() * 25);
+
+      for (let i = 0; i < leafCount; i++) {
+        const offsetDist = Math.random() * 45;
+        const offsetAngle = Math.random() * Math.PI * 2;
+        const lx = sx + Math.cos(offsetAngle) * offsetDist;
+        const ly = sy + Math.sin(offsetAngle) * offsetDist;
+        const leafLen = 10 + Math.random() * 14;
+        const leafWidth = 5 + Math.random() * 7;
+        const leafAngle = offsetAngle + (Math.random() - 0.5) * 0.8;
+
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(leafAngle);
+
+        // Pointed oval leaf shape
+        ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)];
+        ctx.beginPath();
+        ctx.moveTo(0, -leafLen / 2);
+        ctx.quadraticCurveTo(leafWidth / 2, 0, 0, leafLen / 2);
+        ctx.quadraticCurveTo(-leafWidth / 2, 0, 0, -leafLen / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Dark delicate leaf vein
+        ctx.strokeStyle = 'rgba(10, 25, 8, 0.4)';
+        ctx.lineWidth = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(0, -leafLen / 2);
+        ctx.lineTo(0, leafLen / 2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
     return c;
   }
 

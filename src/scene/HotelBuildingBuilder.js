@@ -136,23 +136,15 @@ export class HotelBuildingBuilder {
           // Apply Satellite Orthophoto planar UV projection to the roof cap
           applySatelliteRoofUVs(geo, ORTHO_X_MIN, ORTHO_X_MAX, ORTHO_Z_MIN, ORTHO_Z_MAX);
 
-          if (b.isHotel) {
-            // Other wings of Hotel La Fontana: Real Bogotá brick facade with satellite roof
-            const mesh = new THREE.Mesh(geo, [roofSatMat, facadeBrickMat]);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            this.upperBuildingGroup.add(mesh);
-          } else {
-            // Context buildings: pure frosted architectural white volumes with white wireframe edges
-            const mesh = new THREE.Mesh(geo, contextWhiteMat);
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            this.contextGroup.add(mesh);
+          // All context buildings: pure frosted architectural white volumes with white wireframe edges ("mejor deja todos los volumenes blancos")
+          const mesh = new THREE.Mesh(geo, contextWhiteMat);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          this.contextGroup.add(mesh);
 
-            // Crisp white architectural edges
-            const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), edgeMat);
-            this.contextGroup.add(edges);
-          }
+          // Crisp white architectural edges
+          const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), edgeMat);
+          this.contextGroup.add(edges);
         } catch (e) {
           // Skip invalid polygon
         }
@@ -331,8 +323,8 @@ export class HotelBuildingBuilder {
   buildRealisticTrees(treePoints = []) {
     const treeGroup = new THREE.Group();
     const trunkMat = new THREE.MeshStandardMaterial({
-      color: 0x382c20,
-      roughness: 0.92,
+      color: 0x34291f,
+      roughness: 0.94,
       metalness: 0.02
     });
 
@@ -345,41 +337,85 @@ export class HotelBuildingBuilder {
 
     const shadowMat = this.materials.get('TREE_SHADOW');
 
-    // Shared smooth rounded geometries for high-performance rendering of 500+ trees
-    const trunkGeo = new THREE.CylinderGeometry(0.16, 0.34, 2.6, 8);
-    const branchGeo = new THREE.CylinderGeometry(0.08, 0.15, 1.5, 6);
-    // Detail level 2 for soft rounded organic canopy look
-    const canopyCenterGeo = new THREE.IcosahedronGeometry(1.6, 2);
-    const canopyLobeGeo = new THREE.IcosahedronGeometry(1.15, 2);
-    const shadowGeo = new THREE.PlaneGeometry(6.2, 6.2);
+    // Compile comprehensive botanical planting: JBB official trees + Hotel Courtyard + Street Corridors + Park Groves
+    const allPts = Array.isArray(treePoints) ? [...treePoints] : [];
 
-    const pts = (Array.isArray(treePoints) && treePoints.length > 0)
-      ? treePoints
-      : [[10, 4], [22, 5], [12, -4], [24, -3], [-16, -22], [18, -22], [64, -16]];
+    // 1. Hotel La Fontana Courtyard & Patio de la Fontana (Around central fountain at 16, 2)
+    const courtyardTrees = [
+      [9.5, 7.5], [22.5, 7.5], [9.5, -3.5], [22.5, -3.5],
+      [16, 9.2], [16, -5.2], [7.2, 2.0], [24.8, 2.0],
+      [11.5, 4.5], [20.5, 4.5], [11.5, -0.5], [20.5, -0.5]
+    ];
+    courtyardTrees.forEach(p => allPts.push(p));
 
-    for (let i = 0; i < pts.length; i++) {
-      const [tx, tz] = pts[i];
+    // 2. Av. Calle 127 Double Promenade
+    for (let x = -110; x <= 140; x += 8.0) {
+      allPts.push([x, 43.5]);
+      allPts.push([x, 54.0]);
+    }
+
+    // 3. Calle 124 Southern Promenade
+    for (let x = -90; x <= 120; x += 8.5) {
+      allPts.push([x, -33.5]);
+      allPts.push([x, -26.0]);
+    }
+
+    // 4. Av. Carrera 15 Eastern Boulevard
+    for (let z = -90; z <= 120; z += 9.0) {
+      allPts.push([73.0, z]);
+      allPts.push([83.5, z]);
+    }
+
+    // 5. Carrera 15A Western Promenade
+    for (let z = -80; z <= 100; z += 8.5) {
+      allPts.push([-42.5, z]);
+    }
+
+    // 6. Park Groves & Alameda Clusters (Matching organic clumps in reference image)
+    const addGrove = (cx, cz, count, radius) => {
+      for (let i = 0; i < count; i++) {
+        const angle = (i / count) * Math.PI * 2 + Math.sin(i * 3.7) * 0.5;
+        const r = (0.3 + 0.7 * Math.abs(Math.cos(i * 2.3))) * radius;
+        allPts.push([+(cx + Math.cos(angle) * r).toFixed(2), +(cz + Math.sin(angle) * r).toFixed(2)]);
+      }
+    };
+    addGrove(-70, 15, 18, 16);
+    addGrove(48, -12, 14, 12);
+    addGrove(-25, -55, 16, 14);
+    addGrove(35, 75, 20, 18);
+
+    // Reusable shared geometries for maximum WebGL efficiency and smooth 60fps
+    const shadowGeo = new THREE.PlaneGeometry(8.2, 8.2);
+    const cardGeo = new THREE.PlaneGeometry(6.4, 5.2);
+    const discGeo = new THREE.PlaneGeometry(5.8, 5.8);
+    const puffGeo = new THREE.PlaneGeometry(3.6, 3.2);
+    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.32, 2.6, 8);
+    const rootGeo = new THREE.CylinderGeometry(0.28, 0.52, 0.35, 8);
+    const branchGeo = new THREE.CylinderGeometry(0.06, 0.12, 1.8, 6);
+
+    for (let i = 0; i < allPts.length; i++) {
+      const [tx, tz] = allPts[i];
       const tree = new THREE.Group();
 
-      // Deterministic natural variation per tree
+      // Deterministic natural variation
       const hash = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453);
-      const scale = 0.85 + (hash % 1) * 0.45;
+      const scale = 0.88 + (hash % 1) * 0.42;
       const rot = (hash % 6.28);
 
-      // Distribute species: Roble 40%, Chicalá 30%, Sauco 20%, Guayacán Amarillo 10%
+      // Species distribution: Roble 45%, Chicalá 25%, Sauco 15%, Guayacán Amarillo en flor 15%
       let mat;
       const spVal = (hash * 100) % 100;
-      if (spVal < 40) {
-        mat = speciesMaterials[0] || speciesMaterials[1];
+      if (spVal < 45) {
+        mat = speciesMaterials[0];
       } else if (spVal < 70) {
         mat = speciesMaterials[1];
-      } else if (spVal < 90) {
-        mat = speciesMaterials[2] || speciesMaterials[1];
+      } else if (spVal < 85) {
+        mat = speciesMaterials[2] || speciesMaterials[0];
       } else {
-        mat = speciesMaterials[3] || speciesMaterials[1];
+        mat = speciesMaterials[3] || speciesMaterials[1]; // Vibrant flowering yellow accent
       }
 
-      // 1. Soft radial ground contact shadow decal (Crucial for aerial realism)
+      // 1. Soft radial ground contact shadow decal
       if (shadowMat) {
         const shadow = new THREE.Mesh(shadowGeo, shadowMat);
         shadow.rotation.x = -Math.PI / 2;
@@ -388,52 +424,105 @@ export class HotelBuildingBuilder {
         tree.add(shadow);
       }
 
-      // 2. Trunk & Structural Branches
-      const trunkH = 2.3 * scale;
+      // 2. Trunk, flared root base, and structural branches
+      const trunkH = 2.4 * scale;
       const trunk = new THREE.Mesh(trunkGeo, trunkMat);
       trunk.position.y = trunkH / 2;
       trunk.scale.set(scale, scale, scale);
       trunk.castShadow = true;
       tree.add(trunk);
 
+      const roots = new THREE.Mesh(rootGeo, trunkMat);
+      roots.position.y = 0.16 * scale;
+      roots.scale.set(scale, scale, scale);
+      tree.add(roots);
+
       const b1 = new THREE.Mesh(branchGeo, trunkMat);
-      b1.position.set(0.32 * scale, trunkH * 0.85, 0.22 * scale);
-      b1.rotation.set(0.4, 0.2, -0.6);
+      b1.position.set(0.35 * scale, trunkH * 0.75, 0.25 * scale);
+      b1.rotation.set(0.5, 0.3, -0.6);
       b1.scale.set(scale, scale, scale);
+      b1.castShadow = true;
 
       const b2 = new THREE.Mesh(branchGeo, trunkMat);
-      b2.position.set(-0.28 * scale, trunkH * 0.9, -0.22 * scale);
-      b2.rotation.set(-0.5, 0.3, 0.5);
+      b2.position.set(-0.35 * scale, trunkH * 0.8, -0.2 * scale);
+      b2.rotation.set(-0.4, 0.2, 0.6);
       b2.scale.set(scale, scale, scale);
-      tree.add(b1, b2);
+      b2.castShadow = true;
 
-      // 3. Volumetric Botanical Foliage (Cloud canopy with central buoyant crown + organic lobes)
-      const foliage = new THREE.Group();
+      const b3 = new THREE.Mesh(branchGeo, trunkMat);
+      b3.position.set(0.1 * scale, trunkH * 0.85, -0.35 * scale);
+      b3.rotation.set(-0.5, -0.4, 0.1);
+      b3.scale.set(scale, scale, scale);
+      b3.castShadow = true;
 
-      const centerCrown = new THREE.Mesh(canopyCenterGeo, mat);
-      centerCrown.position.set(0, trunkH + 1.35 * scale, 0);
-      centerCrown.scale.set(scale * 1.1, scale * 0.95, scale * 1.1);
-      centerCrown.castShadow = true;
-      centerCrown.receiveShadow = true;
-      foliage.add(centerCrown);
+      tree.add(b1, b2, b3);
 
-      const lobeOffsets = [
-        [0.85 * scale, trunkH + 1.0 * scale, 0.65 * scale, 0.95],
-        [-0.8 * scale, trunkH + 1.05 * scale, -0.6 * scale, 0.92],
-        [0.65 * scale, trunkH + 1.5 * scale, -0.75 * scale, 0.88],
-        [-0.75 * scale, trunkH + 1.45 * scale, 0.7 * scale, 0.9]
-      ];
+      // 3. Volumetric Botanical Canopy (Multi-axis intersecting quads + crown discs + puff clusters)
+      // This produces feathery, organic, lush tree crowns with NO billiard-ball spheres!
+      const foliageGroup = new THREE.Group();
+      const canopyBaseY = trunkH * 0.75;
+      const canopyH = 4.8 * scale;
 
-      for (const [lx, ly, lz, lobeScale] of lobeOffsets) {
-        const lobe = new THREE.Mesh(canopyLobeGeo, mat);
-        lobe.position.set(lx, ly, lz);
-        lobe.scale.set(scale * lobeScale, scale * lobeScale, scale * lobeScale);
-        lobe.castShadow = true;
-        lobe.receiveShadow = true;
-        foliage.add(lobe);
+      // A. 6 vertical radial intersecting foliage cards
+      for (let a = 0; a < 6; a++) {
+        const angle = (a * Math.PI) / 6;
+        const card = new THREE.Mesh(cardGeo, mat);
+        card.position.set(0, canopyBaseY + canopyH / 2, 0);
+        card.rotation.y = angle;
+        card.scale.set(scale, scale, scale);
+        card.castShadow = true;
+        card.receiveShadow = true;
+        foliageGroup.add(card);
       }
 
-      tree.add(foliage);
+      // B. Horizontal & angled crown discs (Key to dense aerial masterplan view)
+      const disc1 = new THREE.Mesh(discGeo, mat);
+      disc1.rotation.x = -Math.PI / 2;
+      disc1.position.set(0, canopyBaseY + canopyH * 0.52, 0);
+      disc1.scale.set(scale, scale, scale);
+      disc1.castShadow = true;
+
+      const disc2 = new THREE.Mesh(discGeo, mat);
+      disc2.rotation.x = -Math.PI / 2 + 0.15;
+      disc2.rotation.z = 0.35;
+      disc2.position.set(0, canopyBaseY + canopyH * 0.78, 0);
+      disc2.scale.set(scale * 0.82, scale * 0.82, scale * 0.82);
+      disc2.castShadow = true;
+
+      const disc3 = new THREE.Mesh(discGeo, mat);
+      disc3.rotation.x = -Math.PI / 2 - 0.15;
+      disc3.rotation.z = -0.4;
+      disc3.position.set(0, canopyBaseY + canopyH * 0.28, 0);
+      disc3.scale.set(scale * 0.9, scale * 0.9, scale * 0.9);
+      disc3.castShadow = true;
+
+      foliageGroup.add(disc1, disc2, disc3);
+
+      // C. 4 peripheral puff clusters for natural, irregular silhouette
+      const puffOffsets = [
+        [2.0 * scale, canopyBaseY + canopyH * 0.45, 1.5 * scale, 0.4],
+        [-1.9 * scale, canopyBaseY + canopyH * 0.5, -1.4 * scale, 1.2],
+        [-1.6 * scale, canopyBaseY + canopyH * 0.6, 1.8 * scale, 2.1],
+        [1.8 * scale, canopyBaseY + canopyH * 0.35, -1.7 * scale, 2.8]
+      ];
+
+      for (const [px, py, pz, pRot] of puffOffsets) {
+        const p1 = new THREE.Mesh(puffGeo, mat);
+        p1.position.set(px, py, pz);
+        p1.rotation.y = pRot;
+        p1.scale.set(scale, scale, scale);
+        p1.castShadow = true;
+
+        const p2 = new THREE.Mesh(puffGeo, mat);
+        p2.position.set(px, py, pz);
+        p2.rotation.y = pRot + Math.PI / 2;
+        p2.scale.set(scale, scale, scale);
+        p2.castShadow = true;
+
+        foliageGroup.add(p1, p2);
+      }
+
+      tree.add(foliageGroup);
       tree.position.set(tx, 0.08, tz);
       tree.rotation.y = rot;
       treeGroup.add(tree);
