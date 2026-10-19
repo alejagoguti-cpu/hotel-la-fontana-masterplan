@@ -19,7 +19,7 @@ export class MasterplanScene {
       0.5,
       1000
     );
-    this.camera.position.set(55, 42, 65);
+    this.camera.position.set(40, 26, 36);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
     this.renderer.setSize(container.clientWidth, container.clientHeight);
@@ -36,7 +36,7 @@ export class MasterplanScene {
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03; // don't go below ground
     this.controls.minDistance = 5;
     this.controls.maxDistance = 240;
-    this.controls.target.set(16, 8, 2);
+    this.controls.target.set(16, 4.0, 2);
 
     this.materials = new MaterialLibrary(this.renderer);
     this.materials.initAll();
@@ -80,15 +80,16 @@ export class MasterplanScene {
   }
 
   async loadData() {
-    const [arch, finishes, furn, rooms] = await Promise.all([
+    const [arch, finishes, furn, rooms, catastro] = await Promise.all([
       fetch('./data/geometry/p2-architecture.json').then(r => r.json()),
       fetch('./data/geometry/p2-finishes.json').then(r => r.json()),
       fetch('./data/geometry/p2-furniture.json').then(r => r.json()),
-      fetch('./data/rooms-piso2.json').then(r => r.json())
+      fetch('./data/rooms-piso2.json').then(r => r.json()),
+      fetch('./data/geometry/catastro-buildings-3d.json').then(r => r.json()).catch(() => [])
     ]);
 
-    // 1. Hotel building exterior + context
-    const building = this.buildingBuilder.build(arch);
+    // 1. Hotel building exterior + real Catastro urban context
+    const building = this.buildingBuilder.build(arch, catastro);
     this.scene.add(building);
 
     // 2. Interior Piso 2

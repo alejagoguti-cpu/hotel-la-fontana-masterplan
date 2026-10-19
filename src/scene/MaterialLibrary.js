@@ -27,15 +27,31 @@ export class MaterialLibrary {
   }
 
   initAll() {
-    // 1. Exterior Brick Facade (Bogotá classic brick + bump)
-    const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 0.45, 0.45, true);
-    const brickBump = this.getTexture('./assets/textures/hlf_ladrillo_bump.png', 0.45, 0.45, false);
+    // 1. Exterior Brick Facade (Bogotá classic brick + bump) - properly tiled at architectural scale
+    const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 3.5, 3.5, true);
+    const brickBump = this.getTexture('./assets/textures/hlf_ladrillo_bump.png', 3.5, 3.5, false);
     this.materials.set('BRICK_FACADE', new THREE.MeshStandardMaterial({
       map: brickMap,
       bumpMap: brickBump,
-      bumpScale: 0.035,
-      roughness: 0.82,
+      bumpScale: 0.02,
+      roughness: 0.78,
       metalness: 0.02
+    }));
+
+    // 1B. Architectural Context Buildings (Umbra3D Studio signature frosted white look)
+    this.materials.set('CONTEXT_ARCH', new THREE.MeshStandardMaterial({
+      color: 0xe6ebf2,
+      roughness: 0.32,
+      metalness: 0.08,
+      transparent: true,
+      opacity: 0.78
+    }));
+
+    // 1C. Dark Architectural Context / Podium
+    this.materials.set('CONTEXT_DARK', new THREE.MeshStandardMaterial({
+      color: 0x363a42,
+      roughness: 0.5,
+      metalness: 0.2
     }));
 
     // 2. Exterior Ivy Greenery
