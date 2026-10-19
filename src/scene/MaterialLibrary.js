@@ -279,6 +279,205 @@ export class MaterialLibrary {
       roughness: 0.72,
       metalness: 0.18
     }));
+
+    // 12. Remote Sensing & Masterplan Satellite Roof Material (Alejandro Quinto style)
+    const satelliteMap = this.getTexture('./assets/textures/satellite_ortho_la_fontana.jpg', 1, 1, true);
+    this.materials.set('ROOF_SATELLITE', new THREE.MeshStandardMaterial({
+      map: satelliteMap,
+      roughness: 0.82,
+      metalness: 0.04
+    }));
+
+    // 13. Realistic Architectural Facades for Context Buildings (No more plain white boxes)
+    try {
+      // A. Modern Glass Curtain Wall Tower
+      const glassCanvas = this.createGlassFacadeCanvas();
+      const glassTex = new THREE.CanvasTexture(glassCanvas);
+      glassTex.wrapS = THREE.RepeatWrapping;
+      glassTex.wrapT = THREE.RepeatWrapping;
+      glassTex.repeat.set(0.2, 0.3);
+      this.materials.set('FACADE_GLASS_TOWER', new THREE.MeshStandardMaterial({
+        map: glassTex,
+        roughness: 0.28,
+        metalness: 0.5
+      }));
+
+      // B. Bogotá Brick & Masonry Facade with Window Grids
+      const brickCanvas = this.createBrickFacadeCanvas();
+      const brickTex = new THREE.CanvasTexture(brickCanvas);
+      brickTex.wrapS = THREE.RepeatWrapping;
+      brickTex.wrapT = THREE.RepeatWrapping;
+      brickTex.repeat.set(0.22, 0.32);
+      this.materials.set('FACADE_BRICK_GRID', new THREE.MeshStandardMaterial({
+        map: brickTex,
+        roughness: 0.75,
+        metalness: 0.05
+      }));
+
+      // C. Contemporary Stone / Concrete Punched Facade
+      const stoneCanvas = this.createStoneFacadeCanvas();
+      const stoneTex = new THREE.CanvasTexture(stoneCanvas);
+      stoneTex.wrapS = THREE.RepeatWrapping;
+      stoneTex.wrapT = THREE.RepeatWrapping;
+      stoneTex.repeat.set(0.22, 0.32);
+      this.materials.set('FACADE_STONE_GRID', new THREE.MeshStandardMaterial({
+        map: stoneTex,
+        roughness: 0.62,
+        metalness: 0.08
+      }));
+    } catch (e) {
+      // Fallback in headless environments
+      this.materials.set('FACADE_GLASS_TOWER', this.get('CONTEXT_ARCH'));
+      this.materials.set('FACADE_BRICK_GRID', this.get('BRICK_FACADE'));
+      this.materials.set('FACADE_STONE_GRID', this.get('REF28'));
+    }
+  }
+
+  createGlassFacadeCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+
+    // Dark structural background
+    ctx.fillStyle = '#141820';
+    ctx.fillRect(0, 0, 512, 512);
+
+    const floorH = 128;
+    const bayW = 128;
+
+    for (let f = 0; f < 4; f++) {
+      const y = f * floorH;
+
+      // Floor slab spandrel
+      ctx.fillStyle = '#262d38';
+      ctx.fillRect(0, y, 512, 28);
+      ctx.fillStyle = '#1a1f26';
+      ctx.fillRect(0, y + 26, 512, 2);
+
+      // 4 bays per floor
+      for (let b = 0; b < 4; b++) {
+        const x = b * bayW;
+
+        // Mullion frame
+        ctx.fillStyle = '#0f1217';
+        ctx.fillRect(x + 6, y + 32, bayW - 12, floorH - 36);
+
+        // Glass pane gradient
+        const grad = ctx.createLinearGradient(0, y + 34, 0, y + floorH - 6);
+        const hasLight = (f * 7 + b * 13) % 5 === 0;
+        if (hasLight) {
+          grad.addColorStop(0, '#354558');
+          grad.addColorStop(1, '#484032');
+        } else {
+          grad.addColorStop(0, '#24374c');
+          grad.addColorStop(1, '#15212e');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(x + 9, y + 35, bayW - 18, floorH - 42);
+
+        // Vertical center mullion
+        ctx.fillStyle = '#10141a';
+        ctx.fillRect(x + bayW / 2 - 1, y + 35, 2, floorH - 42);
+      }
+    }
+    return c;
+  }
+
+  createBrickFacadeCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+
+    // Bogotá brick terracotta clay background
+    ctx.fillStyle = '#8f3b2a';
+    ctx.fillRect(0, 0, 512, 512);
+
+    // Subtle brick joint texture
+    ctx.fillStyle = '#7a3123';
+    for (let row = 0; row < 64; row++) {
+      const ry = row * 8;
+      ctx.fillRect(0, ry, 512, 1);
+      const offset = (row % 2) * 12;
+      for (let col = 0; col < 24; col++) {
+        ctx.fillRect(col * 24 + offset, ry, 1, 8);
+      }
+    }
+
+    const floorH = 128;
+    const bayW = 128;
+
+    for (let f = 0; f < 4; f++) {
+      const y = f * floorH;
+
+      // Concrete floor slab band
+      ctx.fillStyle = '#d2cabc';
+      ctx.fillRect(0, y, 512, 22);
+      ctx.fillStyle = '#9b9285';
+      ctx.fillRect(0, y + 20, 512, 2);
+
+      // Windows
+      for (let b = 0; b < 4; b++) {
+        const x = b * bayW;
+
+        // Window opening / lintel
+        ctx.fillStyle = '#56241a';
+        ctx.fillRect(x + 24, y + 32, 80, 82);
+
+        // Glass pane
+        ctx.fillStyle = '#182432';
+        ctx.fillRect(x + 28, y + 36, 72, 74);
+
+        // Sill
+        ctx.fillStyle = '#d2cabc';
+        ctx.fillRect(x + 22, y + 110, 84, 6);
+
+        // Mullion cross
+        ctx.fillStyle = '#111822';
+        ctx.fillRect(x + 63, y + 36, 2, 74);
+        ctx.fillRect(x + 28, y + 68, 72, 2);
+      }
+    }
+    return c;
+  }
+
+  createStoneFacadeCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 512;
+    const ctx = c.getContext('2d');
+
+    // Architectural limestone / concrete
+    ctx.fillStyle = '#d0cbc0';
+    ctx.fillRect(0, 0, 512, 512);
+
+    const floorH = 128;
+    const bayW = 128;
+
+    for (let f = 0; f < 4; f++) {
+      const y = f * floorH;
+
+      // Floor line
+      ctx.fillStyle = '#b3aca0';
+      ctx.fillRect(0, y, 512, 16);
+      ctx.fillStyle = '#8f887c';
+      ctx.fillRect(0, y + 15, 512, 2);
+
+      // Punched windows
+      for (let b = 0; b < 4; b++) {
+        const x = b * bayW;
+        ctx.fillStyle = '#22252a';
+        ctx.fillRect(x + 26, y + 28, 76, 86);
+
+        ctx.fillStyle = '#1e2d3d';
+        ctx.fillRect(x + 30, y + 32, 68, 78);
+
+        ctx.fillStyle = '#151c24';
+        ctx.fillRect(x + 63, y + 32, 2, 78);
+      }
+    }
+    return c;
   }
 
   get(key) {

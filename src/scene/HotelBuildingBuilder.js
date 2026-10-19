@@ -32,6 +32,31 @@ export function ptsToShape(pts) {
   return shape;
 }
 
+/**
+ * Projects world (X, Z) coordinates onto the roof cap vertices (materialIndex 0)
+ * matching the satellite aerial orthophoto bounds
+ */
+export function applySatelliteRoofUVs(geometry, xMin = -380.03, xMax = 396.58, zMin = -282.00, zMax = 315.10) {
+  const pos = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  if (!pos || !uv) return;
+  const spanX = xMax - xMin;
+  const spanZ = zMax - zMin;
+
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i);
+    // Roof vertices after rotateX(-PI/2) have Y > 0.4
+    if (y > 0.4) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      const u = (x - xMin) / spanX;
+      const v = 1.0 - (z - zMin) / spanZ;
+      uv.setXY(i, u, v);
+    }
+  }
+  uv.needsUpdate = true;
+}
+
 export class HotelBuildingBuilder {
   constructor(materials) {
     this.materials = materials;
@@ -59,29 +84,34 @@ export class HotelBuildingBuilder {
     return this.rootGroup;
   }
 
-  buildUrbanContext(catastroBuildings = [], urbanNetwork = {}) {
-    const contextArchMat = this.materials.get('CONTEXT_ARCH');
-    const edgeMat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.35
+    const roofSatMat = this.materials.get('ROOF_SATELLITE');
+    const facadeGlassMat = this.materials.get('FACADE_GLASS_TOWER');
+    const facadeBrickMat = this.materials.get('FACADE_BRICK_GRID');
+    const facadeStoneMat = this.materials.get('FACADE_STONE_GRID');
+
+    const ORTHO_X_MIN = -380.03;
+    const ORTHO_X_MAX = 396.58;
+    const ORTHO_Z_MIN = -282.00;
+    const ORTHO_Z_MAX = 315.10;
+
+    // 1. Ground plane with High-Resolution Satellite Aerial Photography
+    const groundW = ORTHO_X_MAX - ORTHO_X_MIN;
+    const groundH = ORTHO_Z_MAX - ORTHO_Z_MIN;
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: this.materials.getTexture('./assets/textures/satellite_ortho_la_fontana.jpg', 1, 1, true),
+      roughness: 0.92,
+      metalness: 0.02
     });
-
-    const brickMat = this.materials.get('BRICK_FACADE');
-    const stoneMat = this.materials.get('REF28');
-    const slateMat = this.materials.get('ROOF_SLATE');
-
-    // 1. Ground plane (dark architectural terrain base)
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x16191f, roughness: 0.95 });
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), groundMat);
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundW, groundH), groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(16, -0.05, 8);
+    ground.position.set((ORTHO_X_MIN + ORTHO_X_MAX) / 2, -0.06, (ORTHO_Z_MIN + ORTHO_Z_MAX) / 2);
     ground.receiveShadow = true;
     this.contextGroup.add(ground);
 
-    // 2. Real Bogotá Catastro Buildings from const.gpkg
+    // 2. Real Bogotá Catastro Buildings from const.gpkg with Satellite Roofs & Architectural Facades
     if (Array.isArray(catastroBuildings) && catastroBuildings.length > 0) {
-      for (const b of catastroBuildings) {
+      for (let i = 0; i < catastroBuildings.length; i++) {
+        const b = catastroBuildings[i];
         if (!b.pts || b.pts.length < 3) continue;
 
         // Skip the main Revit wing to avoid overlapping
@@ -98,22 +128,35 @@ export class HotelBuildingBuilder {
           });
           geo.rotateX(-Math.PI / 2);
 
+          // Apply Satellite Orthophoto planar UV projection to the roof cap
+          applySatelliteRoofUVs(geo, ORTHO_X_MIN, ORTHO_X_MAX, ORTHO_Z_MIN, ORTHO_Z_MAX);
+
           if (b.isHotel) {
-            // Other wings of Hotel La Fontana complex: Rendered with architectural hotel finish
-            const mesh = new THREE.Mesh(geo, [brickMat, slateMat]);
+            // Other wings of Hotel La Fontana: Brick facade with satellite roof
+            const mesh = new THREE.Mesh(geo, [roofSatMat, facadeBrickMat]);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             this.upperBuildingGroup.add(mesh);
           } else {
-            // Surrounding Bogotá buildings: Sleek Umbra3D frosted architectural massing
-            const mesh = new THREE.Mesh(geo, contextArchMat);
+            // Context buildings: Select facade texture based on height and character
+            let sideMat;
+            if (height >= 18.0) {
+              sideMat = facadeGlassMat; // Tall towers: Glass curtain wall
+            } else if (height >= 9.0 || (i % 3 === 0)) {
+              sideMat = facadeBrickMat; // Mid-rise: Bogotá red masonry & windows
+            } else {
+              sideMat = facadeStoneMat; // Low-rise: Contemporary stone/concrete
+            }
+
+            // ExtrudeGeometry: Material 0 = Caps (Roof Satellite), Material 1 = Sides (Facade)
+            const mesh = new THREE.Mesh(geo, [roofSatMat, sideMat]);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             this.contextGroup.add(mesh);
 
-            // Subtle crisp white wireframe edges (Umbra3D signature)
+            // Subtle crisp white architectural edges
             if (height > 6.0) {
-              const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 25), edgeMat);
+              const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo, 30), edgeMat);
               this.contextGroup.add(edges);
             }
           }
@@ -290,7 +333,8 @@ export class HotelBuildingBuilder {
       bevelSegments: 2
     });
     roofGeo.rotateX(-Math.PI / 2);
-    const roofMesh = new THREE.Mesh(roofGeo, [slateMat, slateMat]);
+    applySatelliteRoofUVs(roofGeo, -380.03, 396.58, -282.00, 315.10);
+    const roofMesh = new THREE.Mesh(roofGeo, [this.materials.get('ROOF_SATELLITE'), slateMat]);
     roofMesh.position.y = 18.05;
     roofMesh.castShadow = true;
     roofMesh.receiveShadow = true;
