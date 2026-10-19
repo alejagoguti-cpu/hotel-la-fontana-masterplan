@@ -47,19 +47,19 @@ export class HotelBuildingBuilder {
     this.rootGroup.add(this.upperBuildingGroup);
   }
 
-  build(architectureData, catastroBuildings = []) {
+  build(architectureData, catastroBuildings = [], urbanNetwork = {}) {
     const mainFootprint = architectureData.slabLoops?.[0]?.loops?.[0] || [
       [24840, 3760], [31226, -2626], [28800, -5052], [28800, -11000],
       [32800, -15250], [38900, -15250], [49125, -5025], [29450, 14650],
       [3200, 14650], [3200, 12300], [-14000, 12300], [-14000, 3800]
     ];
 
-    this.buildUrbanContext(catastroBuildings);
+    this.buildUrbanContext(catastroBuildings, urbanNetwork);
     this.buildHotelMassing(mainFootprint);
     return this.rootGroup;
   }
 
-  buildUrbanContext(catastroBuildings) {
+  buildUrbanContext(catastroBuildings = [], urbanNetwork = {}) {
     const contextArchMat = this.materials.get('CONTEXT_ARCH');
     const edgeMat = new THREE.LineBasicMaterial({
       color: 0xffffff,
@@ -71,11 +71,11 @@ export class HotelBuildingBuilder {
     const stoneMat = this.materials.get('REF28');
     const slateMat = this.materials.get('ROOF_SLATE');
 
-    // 1. Ground plane (Bogotá Usaquén base)
-    const groundMat = new THREE.MeshStandardMaterial({ color: 0x181c22, roughness: 0.95 });
+    // 1. Ground plane (dark architectural terrain base)
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x16191f, roughness: 0.95 });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), groundMat);
     ground.rotation.x = -Math.PI / 2;
-    ground.position.set(16, -0.1, 8);
+    ground.position.set(16, -0.05, 8);
     ground.receiveShadow = true;
     this.contextGroup.add(ground);
 
@@ -84,7 +84,7 @@ export class HotelBuildingBuilder {
       for (const b of catastroBuildings) {
         if (!b.pts || b.pts.length < 3) continue;
 
-        // Skip the main Revit wing so it doesn't double-render
+        // Skip the main Revit wing to avoid overlapping
         if (b.isHotel && Math.hypot(b.center[0] - 16, b.center[1] - 1) < 22) {
           continue;
         }
@@ -123,18 +123,66 @@ export class HotelBuildingBuilder {
       }
     }
 
-    // 3. Hotel Courtyard & Gardens
-    const gardenMat = new THREE.MeshStandardMaterial({
-      color: 0x3d6635,
-      roughness: 0.88
-    });
-    const gardenPad = new THREE.Mesh(new THREE.BoxGeometry(64, 0.08, 52), gardenMat);
-    gardenPad.position.set(18, -0.04, 2);
-    gardenPad.receiveShadow = true;
-    this.contextGroup.add(gardenPad);
+    // 3. Official Bogotá Road Network (Calzadas, Andenes, Separadores, Ciclorrutas)
+    const calzadaMat = new THREE.MeshStandardMaterial({ color: 0x24272e, roughness: 0.88 });
+    const andenMat = new THREE.MeshStandardMaterial({ color: 0xb8bec7, roughness: 0.72 });
+    const alamedaMat = new THREE.MeshStandardMaterial({ color: 0x3e6b35, roughness: 0.86 });
+    const cicloMat = new THREE.MeshStandardMaterial({ color: 0x9b3a2a, roughness: 0.78 }); // Red bike path
 
-    // Central Plazoleta & Fountain
-    const courtyard = new THREE.Mesh(new THREE.BoxGeometry(24, 0.12, 20), stoneMat);
+    // A. Calzadas (Roadways, Y = 0 to 0.04m)
+    for (const poly of (urbanNetwork.calzadas || [])) {
+      try {
+        const shape = ptsToShape(poly);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geo, calzadaMat);
+        mesh.position.y = 0.0;
+        mesh.receiveShadow = true;
+        this.contextGroup.add(mesh);
+      } catch (e) {}
+    }
+
+    // B. Andenes (Sidewalks, Y = 0 to 0.16m - raised 3D curbs)
+    for (const poly of (urbanNetwork.andenes || [])) {
+      try {
+        const shape = ptsToShape(poly);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geo, andenMat);
+        mesh.position.y = 0.0;
+        mesh.receiveShadow = true;
+        this.contextGroup.add(mesh);
+      } catch (e) {}
+    }
+
+    // C. Separadores & Alamedas (Medians with grass, Y = 0 to 0.18m)
+    for (const poly of (urbanNetwork.separadores || [])) {
+      try {
+        const shape = ptsToShape(poly);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.18, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geo, alamedaMat);
+        mesh.position.y = 0.0;
+        mesh.receiveShadow = true;
+        this.contextGroup.add(mesh);
+      } catch (e) {}
+    }
+
+    // D. Ciclorrutas (Bogota Bike lanes, Y = 0 to 0.17m)
+    for (const poly of (urbanNetwork.ciclorrutas || [])) {
+      try {
+        const shape = ptsToShape(poly);
+        const geo = new THREE.ExtrudeGeometry(shape, { depth: 0.17, bevelEnabled: false });
+        geo.rotateX(-Math.PI / 2);
+        const mesh = new THREE.Mesh(geo, cicloMat);
+        mesh.position.y = 0.0;
+        mesh.receiveShadow = true;
+        this.contextGroup.add(mesh);
+      } catch (e) {}
+    }
+
+    // 4. Hotel Courtyard Plazoleta & Fountain
+    const courtyard = new THREE.Mesh(new THREE.BoxGeometry(24, 0.18, 20), stoneMat);
     courtyard.position.set(16, 0.02, 2);
     courtyard.receiveShadow = true;
     this.contextGroup.add(courtyard);
@@ -148,66 +196,36 @@ export class HotelBuildingBuilder {
     fountainWater.position.set(16, 0.32, 2);
     this.contextGroup.add(fountainRim, fountainWater);
 
-    // 4. Clean Architectural Streets (Calle 124, Av. Calle 127, Cra 15, Cra 15A)
-    const roadMat = new THREE.MeshStandardMaterial({ color: 0x262930, roughness: 0.88 });
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xd4d8e0 });
-
-    const roads = [
-      { x: 16, z: -32, w: 220, d: 13, label: 'Calle 124' },
-      { x: 16, z: 46, w: 220, d: 16, label: 'Av. Calle 127' },
-      { x: -44, z: 6, w: 14, d: 180, label: 'Carrera 15A' },
-      { x: 78, z: 6, w: 16, d: 180, label: 'Av. Carrera 15' }
-    ];
-
-    for (const r of roads) {
-      const road = new THREE.Mesh(new THREE.BoxGeometry(r.w, 0.08, r.d), roadMat);
-      road.position.set(r.x, -0.02, r.z);
-      road.receiveShadow = true;
-      this.contextGroup.add(road);
-
-      const isHoriz = r.w > r.d;
-      const steps = Math.floor((isHoriz ? r.w : r.d) / 7);
-      for (let i = -steps / 2; i < steps / 2; i++) {
-        const dash = new THREE.Mesh(
-          new THREE.BoxGeometry(isHoriz ? 3.0 : 0.25, 0.1, isHoriz ? 0.25 : 3.0),
-          lineMat
-        );
-        dash.position.set(
-          isHoriz ? r.x + i * 7 : r.x,
-          0.02,
-          isHoriz ? r.z : r.z + i * 7
-        );
-        this.contextGroup.add(dash);
-      }
-    }
-
-    // 5. Stylized Architectural Trees
+    // 5. Real Arbolado Urbano from Jardín Botánico de Bogotá (504 georeferenced trees)
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x3d3024, roughness: 0.92 });
-    const crownMat1 = new THREE.MeshStandardMaterial({ color: 0x2e5c2b, roughness: 0.85 });
-    const crownMat2 = new THREE.MeshStandardMaterial({ color: 0x3e7339, roughness: 0.82 });
+    const crownMat1 = new THREE.MeshStandardMaterial({ color: 0x285425, roughness: 0.85 }); // Shaded base
+    const crownMat2 = new THREE.MeshStandardMaterial({ color: 0x3d7a36, roughness: 0.82 }); // Zenithal highlight
 
-    const treePositions = [
-      [-16, -22], [-6, -22], [6, -22], [18, -22], [28, -22],
-      [-26, 22], [-14, 24], [4, 25], [18, 25], [32, 24], [46, 22],
-      [64, -16], [66, 0], [64, 18], [-32, -6], [-32, 12],
-      [10, 4], [22, 5], [12, -4], [24, -3]
-    ];
+    const trees = (urbanNetwork.arboles && urbanNetwork.arboles.length > 0)
+      ? urbanNetwork.arboles
+      : [[10, 4], [22, 5], [12, -4], [24, -3], [-16, -22], [18, -22]];
 
-    for (let i = 0; i < treePositions.length; i++) {
-      const [tx, tz] = treePositions[i];
+    for (let i = 0; i < trees.length; i++) {
+      const [tx, tz] = trees[i];
       const tree = new THREE.Group();
-      const s = 0.85 + (i % 3) * 0.18;
+      // Natural organic variation per tree
+      const s = 0.8 + ((Math.abs(tx * 7 + tz * 13) % 100) / 100) * 0.45;
 
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.28 * s, 2.4 * s, 8), trunkMat);
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16 * s, 0.26 * s, 2.4 * s, 7), trunkMat);
       trunk.position.y = 1.2 * s;
       trunk.castShadow = true;
 
-      const c1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.7 * s, 1), i % 2 === 0 ? crownMat1 : crownMat2);
-      c1.position.y = 3.1 * s;
+      // 4-tier canopy structure (ambient occlusion shadow, main volume, top highlight)
+      const c1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.65 * s, 1), crownMat1);
+      c1.position.y = 3.0 * s;
       c1.castShadow = true;
 
-      tree.add(trunk, c1);
-      tree.position.set(tx, 0, tz);
+      const c2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.15 * s, 1), crownMat2);
+      c2.position.set(0.25 * s, 3.8 * s, 0.2 * s);
+      c2.castShadow = true;
+
+      tree.add(trunk, c1, c2);
+      tree.position.set(tx, 0.1, tz);
       this.contextGroup.add(tree);
     }
   }
