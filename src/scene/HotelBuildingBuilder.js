@@ -228,11 +228,11 @@ export class HotelBuildingBuilder {
     fountainWater.position.set(16, 0.32, 2);
     this.contextGroup.add(fountainRim, fountainWater);
 
-    // 6. Realistic Architectural Trees (Natural branching structure + organic foliage)
-    this.buildRealisticTrees(urbanNetwork.arboles);
+    // 6. Realistic Architectural Trees (Safe setbacks, varied species, heights, and frondosidad)
+    this.buildRealisticTrees(urbanNetwork.arboles, urbanNetwork.calzadas);
 
-    // 7. Realistic Architectural 3D Vehicles (Detailed chassis, glass, wheels, headlights)
-    this.buildRealisticVehicles();
+    // 7. Realistic Architectural 3D Vehicles (100% inside vehicular calzadas, modern styling, wheels, mirrors, lights)
+    this.buildRealisticVehicles(urbanNetwork.calzadas);
   }
 
   buildRoadMarkings() {
@@ -320,207 +320,305 @@ export class HotelBuildingBuilder {
     this.contextGroup.add(markGroup);
   }
 
-  buildRealisticTrees(treePoints = []) {
+  buildRealisticTrees(treePoints = [], calzadaPolys = []) {
     const treeGroup = new THREE.Group();
     const trunkMat = new THREE.MeshStandardMaterial({
-      color: 0x34291f,
+      color: 0x362b21,
       roughness: 0.94,
       metalness: 0.02
     });
 
-    const speciesMaterials = [
-      this.materials.get('TREE_ROBLE'),
-      this.materials.get('TREE_CHICALA'),
-      this.materials.get('TREE_SAUCO'),
-      this.materials.get('TREE_FLOWER_YELLOW')
+    const speciesConfig = [
+      // 0: Roble Sabanero (Quercus humboldtii) - Majestic spreading mature oak
+      {
+        mat: this.materials.get('TREE_ROBLE'),
+        name: 'Roble',
+        baseHeight: 8.2,
+        baseWidth: 7.8,
+        trunkH: 2.8,
+        cards: 8,
+        discs: 4,
+        puffs: 6
+      },
+      // 1: Urapán / Sauco (Fraxinus chinensis) - Tall upright columnar crown
+      {
+        mat: this.materials.get('TREE_SAUCO'),
+        name: 'Urapan',
+        baseHeight: 7.4,
+        baseWidth: 4.8,
+        trunkH: 2.6,
+        cards: 6,
+        discs: 2,
+        puffs: 3
+      },
+      // 2: Chicalá (Tecoma stans) - Dense compact rounded spring green
+      {
+        mat: this.materials.get('TREE_CHICALA'),
+        name: 'Chicala',
+        baseHeight: 5.2,
+        baseWidth: 5.4,
+        trunkH: 2.0,
+        cards: 6,
+        discs: 3,
+        puffs: 4
+      },
+      // 3: Guayacán Amarillo en flor (Handroanthus chrysanthus) - Radiant golden floral canopy
+      {
+        mat: this.materials.get('TREE_FLOWER_YELLOW'),
+        name: 'Guayacan',
+        baseHeight: 6.8,
+        baseWidth: 7.2,
+        trunkH: 2.4,
+        cards: 8,
+        discs: 3,
+        puffs: 5
+      },
+      // 4: Acacia Japonesa / Árbol Joven - Light, airy, bright chartreuse
+      {
+        mat: this.materials.get('TREE_ACACIA'),
+        name: 'Acacia',
+        baseHeight: 4.0,
+        baseWidth: 3.8,
+        trunkH: 1.8,
+        cards: 4,
+        discs: 2,
+        puffs: 2
+      }
     ];
 
     const shadowMat = this.materials.get('TREE_SHADOW');
 
-    // Compile comprehensive botanical planting: JBB official trees + Hotel Courtyard + Street Corridors + Park Groves
-    const allPts = Array.isArray(treePoints) ? [...treePoints] : [];
+    // Helper: Point in polygon
+    const inPoly = (pt, poly) => {
+      let inside = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const xi = poly[i][0], zi = poly[i][1];
+        const xj = poly[j][0], zj = poly[j][1];
+        const intersect = ((zi > pt[1]) !== (zj > pt[1])) && (pt[0] < (xj - xi) * (pt[1] - zi) / (zj - zi) + xi);
+        if (intersect) inside = !inside;
+      }
+      return inside;
+    };
 
-    // 1. Hotel La Fontana Courtyard & Patio de la Fontana (Around central fountain at 16, 2)
+    // Helper: Distance from point to polygon boundary
+    const distToPolyEdge = (pt, poly) => {
+      let minD = 999;
+      for (let i = 0; i < poly.length; i++) {
+        const p1 = poly[i];
+        const p2 = poly[(i + 1) % poly.length];
+        const dx = p2[0] - p1[0], dz = p2[1] - p1[1];
+        const len2 = dx * dx + dz * dz;
+        let t = len2 === 0 ? 0 : ((pt[0] - p1[0]) * dx + (pt[1] - p1[1]) * dz) / len2;
+        t = Math.max(0, Math.min(1, t));
+        const projX = p1[0] + t * dx;
+        const projZ = p1[1] + t * dz;
+        const d = Math.hypot(pt[0] - projX, pt[1] - projZ);
+        if (d < minD) minD = d;
+      }
+      return minD;
+    };
+
+    // Safe road clearance check: return true if inside or too close to a vehicular roadway
+    const isInsideRoadway = (x, z) => {
+      if (!Array.isArray(calzadaPolys) || calzadaPolys.length === 0) return false;
+      for (const poly of calzadaPolys) {
+        if (!poly || poly.length < 3) continue;
+        if (inPoly([x, z], poly)) return true;
+        if (distToPolyEdge([x, z], poly) < 2.0) return true;
+      }
+      return false;
+    };
+
+    // Collect planting coordinates
+    const candidatePoints = [];
+
+    // 1. Official JBB georeferenced urban trees
+    if (Array.isArray(treePoints)) {
+      for (const pt of treePoints) {
+        candidatePoints.push(pt);
+      }
+    }
+
+    // 2. Hotel La Fontana Central Courtyard & Patio de la Fontana (Around central fountain at 16, 2)
     const courtyardTrees = [
       [9.5, 7.5], [22.5, 7.5], [9.5, -3.5], [22.5, -3.5],
-      [16, 9.2], [16, -5.2], [7.2, 2.0], [24.8, 2.0],
+      [16, 9.5], [16, -5.5], [7.0, 2.0], [25.0, 2.0],
       [11.5, 4.5], [20.5, 4.5], [11.5, -0.5], [20.5, -0.5]
     ];
-    courtyardTrees.forEach(p => allPts.push(p));
+    candidatePoints.push(...courtyardTrees);
 
-    // 2. Av. Calle 127 Double Promenade
-    for (let x = -110; x <= 140; x += 8.0) {
-      allPts.push([x, 43.5]);
-      allPts.push([x, 54.0]);
+    // 3. Wide Sidewalks & Medians at safe setback from road curbs
+    // Calle 127 South Sidewalk (Z ~ 19.5m, well south of road at Z > 22.6)
+    for (let x = -75; x <= 0; x += 10.0) {
+      candidatePoints.push([x, 19.5]);
     }
-
-    // 3. Calle 124 Southern Promenade
-    for (let x = -90; x <= 120; x += 8.5) {
-      allPts.push([x, -33.5]);
-      allPts.push([x, -26.0]);
+    // Calle 127 North Sidewalk (Z ~ 85m, north of road at Z < 82.5)
+    for (let x = -75; x <= 85; x += 9.5) {
+      candidatePoints.push([x, 85.0]);
     }
-
-    // 4. Av. Carrera 15 Eastern Boulevard
-    for (let z = -90; z <= 120; z += 9.0) {
-      allPts.push([73.0, z]);
-      allPts.push([83.5, z]);
+    // Central Separador Verde (median between westbound and eastbound lanes)
+    for (let x = 12; x <= 72; x += 8.5) {
+      candidatePoints.push([x, 54.5]);
     }
-
-    // 5. Carrera 15A Western Promenade
-    for (let z = -80; z <= 100; z += 8.5) {
-      allPts.push([-42.5, z]);
+    // Cra 15 East Sidewalk (X ~ 100m, well clear of roadway)
+    for (let z = -90; z <= 25; z += 9.0) {
+      candidatePoints.push([100.0, z]);
     }
-
-    // 6. Park Groves & Alameda Clusters (Matching organic clumps in reference image)
-    const addGrove = (cx, cz, count, radius) => {
+    // Park Groves (dense clumps in the expansive public green areas)
+    const addSafeGrove = (cx, cz, count, radius) => {
       for (let i = 0; i < count; i++) {
         const angle = (i / count) * Math.PI * 2 + Math.sin(i * 3.7) * 0.5;
-        const r = (0.3 + 0.7 * Math.abs(Math.cos(i * 2.3))) * radius;
-        allPts.push([+(cx + Math.cos(angle) * r).toFixed(2), +(cz + Math.sin(angle) * r).toFixed(2)]);
+        const r = (0.25 + 0.75 * Math.abs(Math.cos(i * 2.3))) * radius;
+        candidatePoints.push([+(cx + Math.cos(angle) * r).toFixed(2), +(cz + Math.sin(angle) * r).toFixed(2)]);
       }
     };
-    addGrove(-70, 15, 18, 16);
-    addGrove(48, -12, 14, 12);
-    addGrove(-25, -55, 16, 14);
-    addGrove(35, 75, 20, 18);
+    addSafeGrove(-85, 10, 16, 14);
+    addSafeGrove(45, -18, 12, 10);
+    addSafeGrove(-30, -55, 15, 12);
+    addSafeGrove(115, 75, 18, 15);
 
-    // Reusable shared geometries for maximum WebGL efficiency and smooth 60fps
-    const shadowGeo = new THREE.PlaneGeometry(8.2, 8.2);
-    const cardGeo = new THREE.PlaneGeometry(6.4, 5.2);
-    const discGeo = new THREE.PlaneGeometry(5.8, 5.8);
-    const puffGeo = new THREE.PlaneGeometry(3.6, 3.2);
-    const trunkGeo = new THREE.CylinderGeometry(0.14, 0.32, 2.6, 8);
-    const rootGeo = new THREE.CylinderGeometry(0.28, 0.52, 0.35, 8);
-    const branchGeo = new THREE.CylinderGeometry(0.06, 0.12, 1.8, 6);
+    // Shared geometries for performance
+    const cardBaseGeo = new THREE.PlaneGeometry(1, 1);
+    const discBaseGeo = new THREE.PlaneGeometry(1, 1);
+    const puffBaseGeo = new THREE.PlaneGeometry(1, 1);
+    const shadowBaseGeo = new THREE.PlaneGeometry(1, 1);
+    const trunkBaseGeo = new THREE.CylinderGeometry(0.14, 0.32, 1, 8);
+    const rootBaseGeo = new THREE.CylinderGeometry(0.28, 0.52, 0.35, 8);
+    const branchBaseGeo = new THREE.CylinderGeometry(0.06, 0.12, 1, 6);
 
-    for (let i = 0; i < allPts.length; i++) {
-      const [tx, tz] = allPts[i];
+    for (let i = 0; i < candidatePoints.length; i++) {
+      const [tx, tz] = candidatePoints[i];
+
+      // STRICT SAFETY FILTER: NEVER plant a tree on a road or inside the hotel wing!
+      if (isInsideRoadway(tx, tz)) continue;
+      // Skip if inside hotel guest room wings
+      if (tx >= -16 && tx <= 50 && tz >= -16 && tz <= 15) {
+        const inCourtyard = (tx >= 6.5 && tx <= 25.5 && tz >= -5.8 && tz <= 9.8);
+        if (!inCourtyard) continue;
+      }
+
       const tree = new THREE.Group();
 
-      // Deterministic natural variation
-      const hash = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453);
-      const scale = 0.88 + (hash % 1) * 0.42;
-      const rot = (hash % 6.28);
+      // Deterministic natural variation per tree
+      const hash1 = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453);
+      const hash2 = Math.abs(Math.cos(tx * 26.6514 + tz * 45.197) * 28461.1278);
+      const rot = (hash1 % 6.28);
 
-      // Species distribution: Roble 45%, Chicalá 25%, Sauco 15%, Guayacán Amarillo en flor 15%
-      let mat;
-      const spVal = (hash * 100) % 100;
-      if (spVal < 45) {
-        mat = speciesMaterials[0];
-      } else if (spVal < 70) {
-        mat = speciesMaterials[1];
-      } else if (spVal < 85) {
-        mat = speciesMaterials[2] || speciesMaterials[0];
-      } else {
-        mat = speciesMaterials[3] || speciesMaterials[1]; // Vibrant flowering yellow accent
-      }
+      // Select species:
+      // Roble (30%), Urapan (25%), Chicala (20%), Guayacan en flor (15%), Acacia (10%)
+      let spIdx = 0;
+      const spVal = (hash1 * 100) % 100;
+      if (spVal < 30) spIdx = 0;
+      else if (spVal < 55) spIdx = 1;
+      else if (spVal < 75) spIdx = 2;
+      else if (spVal < 90) spIdx = 3;
+      else spIdx = 4;
+
+      const spec = speciesConfig[spIdx];
+
+      // Calculate distinct height, canopy width, and frondosidad
+      const sizeMult = 0.82 + (hash2 % 0.38); // 0.82 to 1.20
+      const treeHeight = spec.baseHeight * sizeMult;
+      const canopyWidth = spec.baseWidth * sizeMult;
+      const trunkH = spec.trunkH * sizeMult;
+      const canopyH = treeHeight - trunkH * 0.7;
 
       // 1. Soft radial ground contact shadow decal
       if (shadowMat) {
-        const shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        const shadow = new THREE.Mesh(shadowBaseGeo, shadowMat);
         shadow.rotation.x = -Math.PI / 2;
         shadow.position.set(0, 0.02, 0);
-        shadow.scale.set(scale, scale, 1);
+        shadow.scale.set(canopyWidth * 1.05, canopyWidth * 1.05, 1);
         tree.add(shadow);
       }
 
-      // 2. Trunk, flared root base, and structural branches
-      const trunkH = 2.4 * scale;
-      const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+      // 2. Trunk, root flare, and structural branches
+      const trunk = new THREE.Mesh(trunkBaseGeo, trunkMat);
       trunk.position.y = trunkH / 2;
-      trunk.scale.set(scale, scale, scale);
+      trunk.scale.set(sizeMult, trunkH, sizeMult);
       trunk.castShadow = true;
       tree.add(trunk);
 
-      const roots = new THREE.Mesh(rootGeo, trunkMat);
-      roots.position.y = 0.16 * scale;
-      roots.scale.set(scale, scale, scale);
+      const roots = new THREE.Mesh(rootBaseGeo, trunkMat);
+      roots.position.y = 0.16 * sizeMult;
+      roots.scale.set(sizeMult, sizeMult, sizeMult);
       tree.add(roots);
 
-      const b1 = new THREE.Mesh(branchGeo, trunkMat);
-      b1.position.set(0.35 * scale, trunkH * 0.75, 0.25 * scale);
-      b1.rotation.set(0.5, 0.3, -0.6);
-      b1.scale.set(scale, scale, scale);
+      const b1 = new THREE.Mesh(branchBaseGeo, trunkMat);
+      b1.position.set(0.35 * sizeMult, trunkH * 0.78, 0.22 * sizeMult);
+      b1.rotation.set(0.48, 0.25, -0.55);
+      b1.scale.set(sizeMult, 1.8 * sizeMult, sizeMult);
       b1.castShadow = true;
 
-      const b2 = new THREE.Mesh(branchGeo, trunkMat);
-      b2.position.set(-0.35 * scale, trunkH * 0.8, -0.2 * scale);
-      b2.rotation.set(-0.4, 0.2, 0.6);
-      b2.scale.set(scale, scale, scale);
+      const b2 = new THREE.Mesh(branchBaseGeo, trunkMat);
+      b2.position.set(-0.32 * sizeMult, trunkH * 0.82, -0.2 * sizeMult);
+      b2.rotation.set(-0.45, 0.2, 0.58);
+      b2.scale.set(sizeMult, 1.7 * sizeMult, sizeMult);
       b2.castShadow = true;
 
-      const b3 = new THREE.Mesh(branchGeo, trunkMat);
-      b3.position.set(0.1 * scale, trunkH * 0.85, -0.35 * scale);
-      b3.rotation.set(-0.5, -0.4, 0.1);
-      b3.scale.set(scale, scale, scale);
-      b3.castShadow = true;
+      tree.add(b1, b2);
 
-      tree.add(b1, b2, b3);
-
-      // 3. Volumetric Botanical Canopy (Multi-axis intersecting quads + crown discs + puff clusters)
-      // This produces feathery, organic, lush tree crowns with NO billiard-ball spheres!
+      // 3. Species-Specific Botanical Canopy
       const foliageGroup = new THREE.Group();
       const canopyBaseY = trunkH * 0.75;
-      const canopyH = 4.8 * scale;
 
-      // A. 6 vertical radial intersecting foliage cards
-      for (let a = 0; a < 6; a++) {
-        const angle = (a * Math.PI) / 6;
-        const card = new THREE.Mesh(cardGeo, mat);
+      // A. Vertical radial intersecting foliage cards
+      const numCards = spec.cards;
+      for (let a = 0; a < numCards; a++) {
+        const angle = (a * Math.PI) / numCards;
+        const card = new THREE.Mesh(cardBaseGeo, spec.mat);
         card.position.set(0, canopyBaseY + canopyH / 2, 0);
         card.rotation.y = angle;
-        card.scale.set(scale, scale, scale);
+        card.scale.set(canopyWidth, canopyH, 1);
         card.castShadow = true;
         card.receiveShadow = true;
         foliageGroup.add(card);
       }
 
-      // B. Horizontal & angled crown discs (Key to dense aerial masterplan view)
-      const disc1 = new THREE.Mesh(discGeo, mat);
-      disc1.rotation.x = -Math.PI / 2;
-      disc1.position.set(0, canopyBaseY + canopyH * 0.52, 0);
-      disc1.scale.set(scale, scale, scale);
-      disc1.castShadow = true;
-
-      const disc2 = new THREE.Mesh(discGeo, mat);
-      disc2.rotation.x = -Math.PI / 2 + 0.15;
-      disc2.rotation.z = 0.35;
-      disc2.position.set(0, canopyBaseY + canopyH * 0.78, 0);
-      disc2.scale.set(scale * 0.82, scale * 0.82, scale * 0.82);
-      disc2.castShadow = true;
-
-      const disc3 = new THREE.Mesh(discGeo, mat);
-      disc3.rotation.x = -Math.PI / 2 - 0.15;
-      disc3.rotation.z = -0.4;
-      disc3.position.set(0, canopyBaseY + canopyH * 0.28, 0);
-      disc3.scale.set(scale * 0.9, scale * 0.9, scale * 0.9);
-      disc3.castShadow = true;
-
-      foliageGroup.add(disc1, disc2, disc3);
-
-      // C. 4 peripheral puff clusters for natural, irregular silhouette
-      const puffOffsets = [
-        [2.0 * scale, canopyBaseY + canopyH * 0.45, 1.5 * scale, 0.4],
-        [-1.9 * scale, canopyBaseY + canopyH * 0.5, -1.4 * scale, 1.2],
-        [-1.6 * scale, canopyBaseY + canopyH * 0.6, 1.8 * scale, 2.1],
-        [1.8 * scale, canopyBaseY + canopyH * 0.35, -1.7 * scale, 2.8]
-      ];
-
-      for (const [px, py, pz, pRot] of puffOffsets) {
-        const p1 = new THREE.Mesh(puffGeo, mat);
-        p1.position.set(px, py, pz);
-        p1.rotation.y = pRot;
-        p1.scale.set(scale, scale, scale);
-        p1.castShadow = true;
-
-        const p2 = new THREE.Mesh(puffGeo, mat);
-        p2.position.set(px, py, pz);
-        p2.rotation.y = pRot + Math.PI / 2;
-        p2.scale.set(scale, scale, scale);
-        p2.castShadow = true;
-
-        foliageGroup.add(p1, p2);
+      // B. Horizontal crown discs for lush aerial perspective
+      const numDiscs = spec.discs;
+      for (let d = 0; d < numDiscs; d++) {
+        const t = (d + 1) / (numDiscs + 1);
+        const disc = new THREE.Mesh(discBaseGeo, spec.mat);
+        disc.rotation.x = -Math.PI / 2 + (d % 2 === 0 ? 0.12 : -0.12);
+        disc.rotation.z = (d * 0.4);
+        disc.position.set(0, canopyBaseY + canopyH * t, 0);
+        const discW = canopyWidth * (1.0 - Math.abs(t - 0.5) * 0.65);
+        disc.scale.set(discW, discW, 1);
+        disc.castShadow = true;
+        foliageGroup.add(disc);
       }
+
+      // C. Satellite puff quads for natural irregular silhouette
+      const numPuffs = spec.puffs;
+      for (let p = 0; p < numPuffs; p++) {
+        const pAngle = (p / numPuffs) * Math.PI * 2 + 0.3;
+        const pRad = canopyWidth * 0.35;
+        const px = Math.cos(pAngle) * pRad;
+        const pz = Math.sin(pAngle) * pRad;
+        const py = canopyBaseY + canopyH * (0.35 + (p % 3) * 0.2);
+
+        const puffW = canopyWidth * 0.55;
+        const puffH = canopyH * 0.55;
+
+        const puff1 = new THREE.Mesh(puffBaseGeo, spec.mat);
+        puff1.position.set(px, py, pz);
+        puff1.rotation.y = pAngle;
+        puff1.scale.set(puffW, puffH, 1);
+        puff1.castShadow = true;
+
+        const puff2 = new THREE.Mesh(puffBaseGeo, spec.mat);
+        puff2.position.set(px, py, pz);
+        puff2.rotation.y = pAngle + Math.PI / 2;
+        puff2.scale.set(puffW, puffH, 1);
+        puff2.castShadow = true;
+
+        foliageGroup.add(puff1, puff2);
+      }
+
+      // Organic subtle tilt
+      foliageGroup.rotation.z = (hash1 % 0.1) - 0.05;
+      foliageGroup.rotation.x = (hash2 % 0.1) - 0.05;
 
       tree.add(foliageGroup);
       tree.position.set(tx, 0.08, tz);
@@ -531,95 +629,145 @@ export class HotelBuildingBuilder {
     this.contextGroup.add(treeGroup);
   }
 
-  buildRealisticVehicles() {
+  buildRealisticVehicles(calzadaPolys = []) {
     const carGroup = new THREE.Group();
 
-    // Vehicle paint colors (realistic urban palette)
+    // Automotive paint colors (high-end architectural palette)
     const paintColors = [
-      0x1c2024, // Obsidian Black
-      0xdfdfdf, // Polar White
+      0x181c22, // Obsidian Black
+      0xedeef2, // Polar White Metallic
       0x4a525d, // Slate Grey Metallic
-      0x8c1d24, // Crimson Red
-      0x1e3a5f, // Deep Blue Metallic
-      0xf4c430  // Taxi Yellow Bogota
+      0x8c1b22, // Crimson Red
+      0x1c385c  // Deep Navy Metallic
     ];
 
-    const glassMat = new THREE.MeshPhysicalMaterial({
-      color: 0x111620,
-      roughness: 0.1,
-      metalness: 0.9,
-      transmission: 0.2
-    });
-    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x181818, roughness: 0.85 });
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0xd8d8d8, metalness: 0.8, roughness: 0.2 });
-    const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const taillightMat = new THREE.MeshBasicMaterial({ color: 0xcc1111 });
+    const taxiColor = 0xf6c83b; // Radiant Bogotá Taxi Yellow
 
+    const glassMat = new THREE.MeshPhysicalMaterial({
+      color: 0x141a24,
+      roughness: 0.08,
+      metalness: 0.85,
+      transmission: 0.3
+    });
+    const wheelMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.9 });
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0xd8dde2, metalness: 0.85, roughness: 0.2 });
+    const headlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const taillightMat = new THREE.MeshBasicMaterial({ color: 0xdd1818 });
+    const carShadowMat = this.materials.get('CAR_SHADOW');
+    const taxiSignMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.2 });
+    const trimBlackMat = new THREE.MeshStandardMaterial({ color: 0x181a1d, roughness: 0.7 });
+
+    // 100% VERIFIED CALZADA COORDINATES (Strictly inside vehicular road lanes)
     const carSpots = [
-      // Av. Calle 127 (East-West traffic)
-      [-42, 45.2, 0, 0],
-      [8, 45.2, 0, 1],
-      [58, 45.2, 0, 2],
-      [-18, 51.8, Math.PI, 3],
-      [36, 51.8, Math.PI, 4],
-      [94, 51.8, Math.PI, 5],
-      // Calle 124
-      [-24, -30.5, 0, 1],
-      [28, -30.5, 0, 2],
-      // Av. Carrera 15 (North-South traffic)
-      [74.5, -34, Math.PI / 2, 0],
-      [74.5, 14, Math.PI / 2, 5],
-      [81.5, -12, -Math.PI / 2, 4],
-      [81.5, 62, -Math.PI / 2, 3]
+      // Calle 127 South (Eastbound traffic, heading 0 to 0.18 rad)
+      { pos: [-45, 30.5], rot: 0, type: 'sedan', color: 0 },
+      { pos: [-15, 31.0], rot: 0, type: 'suv', color: 1 },
+      { pos: [15, 36.0], rot: 0.08, type: 'taxi', color: 5 },
+      { pos: [42, 38.5], rot: 0.12, type: 'sedan', color: 2 },
+      { pos: [68, 43.0], rot: 0.18, type: 'suv', color: 3 },
+      { pos: [110, 46.5], rot: 0, type: 'sedan', color: 4 },
+
+      // Calle 127 North (Westbound traffic, heading PI to PI-0.08 rad)
+      { pos: [70, 74.0], rot: Math.PI, type: 'sedan', color: 1 },
+      { pos: [35, 68.0], rot: Math.PI - 0.08, type: 'taxi', color: 5 },
+      { pos: [5, 64.0], rot: Math.PI, type: 'suv', color: 0 },
+      { pos: [-25, 61.0], rot: Math.PI, type: 'sedan', color: 2 },
+      { pos: [-55, 57.0], rot: Math.PI, type: 'suv', color: 3 },
+
+      // Carrera 15 (Northbound traffic, heading PI/2 rad)
+      { pos: [82.0, -45.0], rot: Math.PI / 2, type: 'sedan', color: 4 },
+      { pos: [82.0, -10.0], rot: Math.PI / 2, type: 'taxi', color: 5 },
+      { pos: [82.0, 18.0], rot: Math.PI / 2, type: 'suv', color: 0 },
+
+      // Carrera 15 (Southbound traffic, heading -PI/2 rad)
+      { pos: [80.0, 5.0], rot: -Math.PI / 2, type: 'sedan', color: 1 },
+      { pos: [85.0, -25.0], rot: -Math.PI / 2, type: 'suv', color: 2 }
     ];
 
     for (let i = 0; i < carSpots.length; i++) {
-      const [cx, cz, rot, colorIdx] = carSpots[i];
+      const spot = carSpots[i];
       const car = new THREE.Group();
+      const isTaxi = spot.type === 'taxi';
+      const isSUV = spot.type === 'suv';
 
+      const bodyColor = isTaxi ? taxiColor : paintColors[spot.color % paintColors.length];
       const bodyMat = new THREE.MeshStandardMaterial({
-        color: paintColors[colorIdx % paintColors.length],
-        metalness: 0.65,
-        roughness: 0.25
+        color: bodyColor,
+        metalness: isTaxi ? 0.35 : 0.72,
+        roughness: isTaxi ? 0.3 : 0.22
       });
 
-      // 1. Lower Chassis (hood + fenders + trunk)
-      const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.68, 1.85), bodyMat);
-      chassis.position.y = 0.52;
+      const length = isSUV ? 4.5 : 4.3;
+      const width = isSUV ? 1.95 : 1.82;
+      const height = isSUV ? 1.58 : 1.38;
+
+      // 1. Underbody Ground Contact Shadow Decal on Asphalt
+      if (carShadowMat) {
+        const shadow = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.5), carShadowMat);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.set(0, 0.03, 0);
+        car.add(shadow);
+      }
+
+      // 2. Lower Chassis Body (sloping hood, fenders, trunk)
+      const chassisH = height * 0.44;
+      const chassis = new THREE.Mesh(new THREE.BoxGeometry(length, chassisH, width), bodyMat);
+      chassis.position.y = 0.32 + chassisH / 2;
       chassis.castShadow = true;
       car.add(chassis);
 
-      // 2. Cabin Greenhouse
-      const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.3, 0.65, 1.55), bodyMat);
-      cabin.position.set(-0.25, 1.15, 0);
+      // Front bumper / grille recess
+      const grille = new THREE.Mesh(new THREE.BoxGeometry(0.12, chassisH * 0.65, width * 0.65), trimBlackMat);
+      grille.position.set(length / 2 + 0.02, 0.32 + chassisH * 0.4, 0);
+      car.add(grille);
+
+      // 3. Cabin Greenhouse with Sloped Windshield
+      const cabinL = length * 0.54;
+      const cabinH = height * 0.54;
+      const cabinW = width * 0.86;
+      const cabinY = 0.32 + chassisH + cabinH / 2;
+
+      const cabin = new THREE.Mesh(new THREE.BoxGeometry(cabinL, cabinH, cabinW), bodyMat);
+      cabin.position.set(-length * 0.06, cabinY, 0);
       cabin.castShadow = true;
 
       // Windshield & Rear glass
-      const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 1.48), glassMat);
-      windshield.position.set(0.92, 1.14, 0);
-      windshield.rotation.z = -0.35;
+      const windshield = new THREE.Mesh(new THREE.BoxGeometry(0.12, cabinH * 0.92, cabinW * 0.94), glassMat);
+      windshield.position.set(-length * 0.06 + cabinL / 2 + 0.02, cabinY, 0);
+      windshield.rotation.z = -0.38;
 
-      const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.58, 1.48), glassMat);
-      rearGlass.position.set(-1.42, 1.14, 0);
-      rearGlass.rotation.z = 0.35;
+      const rearGlass = new THREE.Mesh(new THREE.BoxGeometry(0.12, cabinH * 0.9, cabinW * 0.94), glassMat);
+      rearGlass.position.set(-length * 0.06 - cabinL / 2 - 0.02, cabinY, 0);
+      rearGlass.rotation.z = 0.38;
 
-      // Side windows
-      const sideGlassL = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.48, 0.08), glassMat);
-      sideGlassL.position.set(-0.25, 1.18, 0.76);
-      const sideGlassR = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.48, 0.08), glassMat);
-      sideGlassR.position.set(-0.25, 1.18, -0.76);
+      // Side glass
+      const sideGlassL = new THREE.Mesh(new THREE.BoxGeometry(cabinL * 0.92, cabinH * 0.72, 0.08), glassMat);
+      sideGlassL.position.set(-length * 0.06, cabinY, cabinW / 2 + 0.02);
+      const sideGlassR = new THREE.Mesh(new THREE.BoxGeometry(cabinL * 0.92, cabinH * 0.72, 0.08), glassMat);
+      sideGlassR.position.set(-length * 0.06, cabinY, -cabinW / 2 - 0.02);
 
       car.add(cabin, windshield, rearGlass, sideGlassL, sideGlassR);
 
-      // 3. 4 Wheels with rubber tires and rims
-      const wheelGeo = new THREE.CylinderGeometry(0.34, 0.34, 0.22, 16);
+      // 4. Side View Mirrors
+      const mirrorGeo = new THREE.BoxGeometry(0.18, 0.12, 0.22);
+      const mirrorL = new THREE.Mesh(mirrorGeo, bodyMat);
+      mirrorL.position.set(-length * 0.06 + cabinL / 2 - 0.1, cabinY - 0.08, width / 2 + 0.12);
+      const mirrorR = new THREE.Mesh(mirrorGeo, bodyMat);
+      mirrorR.position.set(-length * 0.06 + cabinL / 2 - 0.1, cabinY - 0.08, -width / 2 - 0.12);
+      car.add(mirrorL, mirrorR);
+
+      // 5. 4 Detailed Wheels with Rubber Tires & Metallic Alloy Rims
+      const tireR = 0.34;
+      const wheelGeo = new THREE.CylinderGeometry(tireR, tireR, 0.24, 16);
       wheelGeo.rotateX(Math.PI / 2);
-      const rimGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.24, 12);
+      const rimGeo = new THREE.CylinderGeometry(tireR * 0.65, tireR * 0.65, 0.26, 12);
       rimGeo.rotateX(Math.PI / 2);
 
+      const wheelX = length * 0.32;
+      const wheelZ = width / 2 + 0.02;
       const wheelPositions = [
-        [1.3, 0.34, 0.88], [1.3, 0.34, -0.88],
-        [-1.3, 0.34, 0.88], [-1.3, 0.34, -0.88]
+        [wheelX, tireR, wheelZ], [wheelX, tireR, -wheelZ],
+        [-wheelX, tireR, wheelZ], [-wheelX, tireR, -wheelZ]
       ];
 
       for (const [wx, wy, wz] of wheelPositions) {
@@ -631,21 +779,29 @@ export class HotelBuildingBuilder {
         car.add(wheel, rim);
       }
 
-      // 4. Headlights & Taillights
-      const hlLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.35), headlightMat);
-      hlLeft.position.set(2.14, 0.62, 0.62);
-      const hlRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.16, 0.35), headlightMat);
-      hlRight.position.set(2.14, 0.62, -0.62);
+      // 6. Dual Xenon/LED Headlights & Taillights
+      const hlL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.32), headlightMat);
+      hlL.position.set(length / 2 + 0.02, 0.32 + chassisH * 0.6, width * 0.35);
+      const hlR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.32), headlightMat);
+      hlR.position.set(length / 2 + 0.02, 0.32 + chassisH * 0.6, -width * 0.35);
 
-      const tlLeft = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.32), taillightMat);
-      tlLeft.position.set(-2.14, 0.62, 0.62);
-      const tlRight = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.32), taillightMat);
-      tlRight.position.set(-2.14, 0.62, -0.62);
+      const tlL = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.3), taillightMat);
+      tlL.position.set(-length / 2 - 0.02, 0.32 + chassisH * 0.62, width * 0.34);
+      const tlR = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.12, 0.3), taillightMat);
+      tlR.position.set(-length / 2 - 0.02, 0.32 + chassisH * 0.62, -width * 0.34);
 
-      car.add(hlLeft, hlRight, tlLeft, tlRight);
+      car.add(hlL, hlR, tlL, tlR);
 
-      car.position.set(cx, 0, cz);
-      car.rotation.y = rot;
+      // 7. Taxi Rooftop Sign
+      if (isTaxi) {
+        const taxiSign = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.16, 0.8), taxiSignMat);
+        taxiSign.position.set(-length * 0.06, cabinY + cabinH / 2 + 0.1, 0);
+        taxiSign.castShadow = true;
+        car.add(taxiSign);
+      }
+
+      car.position.set(spot.pos[0], 0, spot.pos[1]);
+      car.rotation.y = spot.rot;
       carGroup.add(car);
     }
 

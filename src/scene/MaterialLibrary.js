@@ -293,7 +293,9 @@ export class MaterialLibrary {
     try {
       const leafTexRoble = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('roble'));
       const leafTexChicala = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('chicala'));
+      const leafTexUrapan = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('urapan'));
       const leafTexFlower = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('flower'));
+      const leafTexAcacia = new THREE.CanvasTexture(this.createBotanicalLeafCanvas('acacia'));
 
       // Species A: Sabana Oak (Roble) - Deep rich emerald foliage
       this.materials.set('TREE_ROBLE', new THREE.MeshStandardMaterial({
@@ -315,9 +317,9 @@ export class MaterialLibrary {
         metalness: 0.02
       }));
 
-      // Species C: Sauco / Urapán - Warm mid-green foliage
+      // Species C: Sauco / Urapán - Warm olive-sage upright foliage
       this.materials.set('TREE_SAUCO', new THREE.MeshStandardMaterial({
-        map: leafTexRoble,
+        map: leafTexUrapan,
         alphaTest: 0.18,
         transparent: true,
         side: THREE.DoubleSide,
@@ -335,6 +337,16 @@ export class MaterialLibrary {
         metalness: 0.02
       }));
 
+      // Species E: Acacia / Árbol Joven - Light bright chartreuse foliage
+      this.materials.set('TREE_ACACIA', new THREE.MeshStandardMaterial({
+        map: leafTexAcacia,
+        alphaTest: 0.18,
+        transparent: true,
+        side: THREE.DoubleSide,
+        roughness: 0.82,
+        metalness: 0.02
+      }));
+
       // Soft circular contact shadow decal on the ground under each tree
       const shadowCanvas = this.createTreeShadowCanvas();
       const shadowTex = new THREE.CanvasTexture(shadowCanvas);
@@ -344,12 +356,24 @@ export class MaterialLibrary {
         opacity: 0.65,
         depthWrite: false
       }));
+
+      // Soft rectangular vehicle contact shadow on the road
+      const carShadowCanvas = this.createCarShadowCanvas();
+      const carShadowTex = new THREE.CanvasTexture(carShadowCanvas);
+      this.materials.set('CAR_SHADOW', new THREE.MeshBasicMaterial({
+        map: carShadowTex,
+        transparent: true,
+        opacity: 0.72,
+        depthWrite: false
+      }));
     } catch (e) {
       this.materials.set('TREE_ROBLE', new THREE.MeshStandardMaterial({ color: 0x2e5c26, roughness: 0.8 }));
       this.materials.set('TREE_CHICALA', new THREE.MeshStandardMaterial({ color: 0x569632, roughness: 0.8 }));
       this.materials.set('TREE_SAUCO', new THREE.MeshStandardMaterial({ color: 0x3d742e, roughness: 0.8 }));
       this.materials.set('TREE_FLOWER_YELLOW', new THREE.MeshStandardMaterial({ color: 0xdfa622, roughness: 0.8 }));
+      this.materials.set('TREE_ACACIA', new THREE.MeshStandardMaterial({ color: 0x7ecf3c, roughness: 0.8 }));
       this.materials.set('TREE_SHADOW', new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.35 }));
+      this.materials.set('CAR_SHADOW', new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.5 }));
     }
 
     // 14. Bright Realistic Urban Materials (Matching Reference Image)
@@ -465,6 +489,24 @@ export class MaterialLibrary {
     grad.addColorStop(1, 'rgba(30, 35, 40, 0.0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 256, 256);
+    return c;
+  }
+
+  createCarShadowCanvas() {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, 256, 128);
+
+    // Soft rounded rectangular drop shadow for underbody ambient occlusion
+    const grad = ctx.createRadialGradient(128, 64, 20, 128, 64, 110);
+    grad.addColorStop(0, 'rgba(10, 14, 18, 0.85)');
+    grad.addColorStop(0.5, 'rgba(12, 16, 20, 0.45)');
+    grad.addColorStop(0.85, 'rgba(15, 20, 25, 0.12)');
+    grad.addColorStop(1, 'rgba(20, 25, 30, 0.0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 256, 128);
     return c;
   }
 
