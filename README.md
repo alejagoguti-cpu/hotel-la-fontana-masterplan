@@ -7,7 +7,6 @@
 
 Gemelo digital interactivo y Web Masterplan 3D del **Hotel Estelar La Fontana** (Bogotá D.C.), integrando la remodelación integral del **Piso 2** y su contexto urbano (Usaquén / Santa Bárbara / Unicentro).
 
-Diseñado con la interfaz de usuario de **Umbra3D Studio (Las Galias · Centrum)**, motor de renderizado PBR con texturas fotorrealistas de la vida real (ladrillo bogotano, madera vinílica, mármol Antik Silver, porcelanatos, mosaicos y tejidos), selector interactivo habitación por habitación y un **Revit AI Agent / BIM Inspector** activable inspirado en el flujo de trabajo de auditoría de modelos Revit.
 
 ---
 
