@@ -27,14 +27,15 @@ export class MaterialLibrary {
   }
 
   initAll() {
-    // 1. Exterior Brick Facade (Bogotá classic brick + bump) - properly tiled at architectural scale
-    const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 3.5, 3.5, true);
-    const brickBump = this.getTexture('./assets/textures/hlf_ladrillo_bump.png', 3.5, 3.5, false);
+    // 1. Exterior Brick Facade (Iconic Hotel Estelar La Fontana Bogotá red brick)
+    const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 1.0, 1.0, true);
+    const brickBump = this.getTexture('./assets/textures/hlf_ladrillo_bump.png', 1.0, 1.0, false);
     this.materials.set('BRICK_FACADE', new THREE.MeshStandardMaterial({
       map: brickMap,
       bumpMap: brickBump,
-      bumpScale: 0.02,
-      roughness: 0.78,
+      bumpScale: 0.04,
+      color: 0xc44f33, // Warm vibrant Bogotá red brick tint
+      roughness: 0.74,
       metalness: 0.02
     }));
 
@@ -266,12 +267,12 @@ export class MaterialLibrary {
       transmission: 0.65
     }));
 
-    this.materials.set('WINDOW_EXT', new THREE.MeshPhysicalMaterial({
-      color: 0x243848,
+    this.materials.set('WINDOW_EXT', new THREE.MeshStandardMaterial({
+      color: 0x162636,
       roughness: 0.12,
-      metalness: 0.65,
-      transparent: true,
-      opacity: 0.82
+      metalness: 0.85,
+      emissive: 0xffde9b,
+      emissiveIntensity: 0.22
     }));
 
     this.materials.set('ROOF_SLATE', new THREE.MeshStandardMaterial({
