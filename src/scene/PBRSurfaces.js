@@ -7,12 +7,17 @@ import * as THREE from 'three';
  * escala grande girada) para romper el patrón repetido y añadir manchas y desgaste
  * a gran escala.
  */
+// Copia local en assets/textures/pbr (ver .github/workflows/fetch-pbr-textures.yml);
+// si aún no existe, se usa el CDN de Poly Haven como respaldo.
+const LOCAL = './assets/textures/pbr';
 const CDN = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k';
 const loader = new THREE.TextureLoader();
 loader.setCrossOrigin('anonymous');
 
 function load(id, kind, srgb) {
-  const t = loader.load(`${CDN}/${id}/${id}_${kind}_1k.jpg`);
+  const t = loader.load(`${LOCAL}/${id}_${kind}_1k.jpg`, undefined, undefined, () => {
+    loader.load(`${CDN}/${id}/${id}_${kind}_1k.jpg`, (img) => { t.image = img.image; t.needsUpdate = true; });
+  });
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.anisotropy = 8;
   if (srgb) t.colorSpace = THREE.SRGBColorSpace;
