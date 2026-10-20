@@ -6,6 +6,14 @@ import { RoofBuilder } from './RoofBuilder.js';
 import { FacadeWindows } from './FacadeWindows.js';
 import { SiteDetails } from './SiteDetails.js';
 import { applyPBR, SURFACES } from './PBRSurfaces.js';
+import { LaFontanaTower } from './LaFontanaTower.js';
+import { Traffic } from './Traffic.js';
+
+// Torre de la Carrera 15 y su ala vecina (foto de la plaza): estilo distinto
+const TOWER_CENTER = [47.58, -0.93];
+const TOWER_WING_CENTER = [31.46, -23.14];
+const near = (c, ref, r = 1.5) => Math.hypot(c[0] - ref[0], c[1] - ref[1]) < r;
+const centroid = (pts) => pts.reduce((a, p) => [a[0] + p[0] / pts.length, a[1] + p[1] / pts.length], [0, 0]);
 
 const MM_TO_M = 0.001;
 
@@ -152,9 +160,13 @@ export class HotelBuildingBuilder {
     ];
 
     this.ctxWindows = new FacadeWindows(this.materials);
+    this.towerWindows = new FacadeWindows(this.materials, { plain: true, heightScale: 0.9 });
+    this.tower = new LaFontanaTower(this.materials);
+    this.facadeSets = [this.ctxWindows, this.towerWindows];
     this.siteDetails = new SiteDetails(this.materials);
     this.buildUrbanContext(catastroBuildings, urbanNetwork);
     this.contextGroup.add(this.ctxWindows.build());
+    this.contextGroup.add(this.towerWindows.build());
     this.buildHotelMassing(mainFootprint, revitWindows);
     return this.rootGroup;
   }
@@ -324,7 +336,10 @@ export class HotelBuildingBuilder {
     // 1b. Cubiertas de teja a cuatro aguas del conjunto La Fontana (precalculadas)
     if (this.roofData?.context) {
       this.roofData.context.forEach((r) => {
-        if (r.slope) this.roofBuilder.addRoof(r, this.contextGroup, { gallery: true, ivyMat: this.materials.get('REVIT_WIN_IVY') });
+        if (!r.slope) return;
+        // la torre no lleva teja: remata en mirador acristalado (ver LaFontanaTower)
+        if (r.footprint && near(centroid(r.footprint), TOWER_CENTER, 2.5)) return;
+        this.roofBuilder.addRoof(r, this.contextGroup, { gallery: true, ivyMat: this.materials.get('REVIT_WIN_IVY') });
       });
     }
 
@@ -398,7 +413,23 @@ export class HotelBuildingBuilder {
             const topSkip = (this.roofData && height >= 6.5) ? 1 : 0;
             const sills = [];
             for (let k = 0; k < floors - topSkip; k++) sills.push(k * fh + 0.9);
-            this.ctxWindows.addAlongPolygon(b.pts, sills);
+            if (near(b.center, TOWER_CENTER)) {
+              // Torre: vanos pequeños, mirador acristalado, balcón metálico y acceso en arco
+              this.tower.buildCrown(b.pts, height, this.contextGroup);
+              this.tower.addTowerOpenings(b.pts, height, floors, this.towerWindows, this.contextGroup);
+              const E = b.pts.map((p, i) => [p, b.pts[(i + 1) % b.pts.length]]);
+              const [a0, a1] = E.reduce((best, e) => (Math.hypot(e[1][0] - e[0][0], e[1][1] - e[0][1]) > Math.hypot(best[1][0] - best[0][0], best[1][1] - best[0][1]) ? e : best));
+              let ar = 0; b.pts.forEach((p, i) => { const q = b.pts[(i + 1) % b.pts.length]; ar += p[0] * q[1] - q[0] * p[1]; });
+              const sg = ar > 0 ? 1 : -1, L = Math.hypot(a1[0] - a0[0], a1[1] - a0[1]);
+              const ux = (a1[0] - a0[0]) / L, uz = (a1[1] - a0[1]) / L;
+              this.tower.buildArchEntrance({ p: a0, q: a1, len: L, ux, uz, nx: sg * uz, nz: -sg * ux }, this.contextGroup);
+            } else if (near(b.center, TOWER_WING_CENTER)) {
+              // Ala vecina: vanos simples sin jardinera + loggia de madera junto a la torre
+              this.towerWindows.addAlongPolygon(b.pts, sills, { spacing: 3.2, width: 1.0 });
+              this.tower.buildLoggia([58.3, -7.8], [54.2, -1.8], fh * (floors - 3), this.contextGroup);
+            } else {
+              this.ctxWindows.addAlongPolygon(b.pts, sills);
+            }
           } else {
             // Surrounding non-hotel urban context: frosted architectural white volumes
                         const mesh = new THREE.Mesh(geo, contextWhiteMat);
@@ -419,6 +450,7 @@ export class HotelBuildingBuilder {
     applyPBR(calzadaMat, SURFACES.ASPHALT, { metersPerTile: 5.0, tint: 0xb8b8b8, normalScale: 1.0, macro: { macroScale: 0.06, strength: 0.38 } });
     const andenMat = this.materials.get('SIDEWALK_PAVING');
     const alamedaMat = this.materials.get('TURF_GRASS');
+    applyPBR(alamedaMat, SURFACES.GRASS, { metersPerTile: 3.0, tint: 0xc8d4b8, normalScale: 0.8, macro: { macroScale: 0.05, strength: 0.4 } });
     const cicloMat = this.materials.get('BIKEWAY_BLUE');
 
     for (const poly of (urbanNetwork.calzadas || [])) {
@@ -485,7 +517,8 @@ export class HotelBuildingBuilder {
     const sd = this.siteDetails;
     // Andenes en adoquín rojo; plazoleta en adoquín de arcilla gris-café (fotos de sitio)
     sd.applySidewalkPaving();
-    sd.buildCourtPaving(7, 9.9, 58, 27.3, this.contextGroup);
+    // Plazoleta continua hasta el andén (sin franjas de terreno vacío)
+    sd.buildCourtPavingPoly([[-24.0, 23.28], [54.72, 31.39], [55.3, 25.78], [60.0, 26.25], [60.0, -4.0], [-24.0, -4.0]], this.contextGroup);
 
     // Fuente sobre jardinera hexagonal de ladrillo, frente a la escalinata
     sd.buildFountain(16, 6.2, this.contextGroup);
@@ -494,7 +527,7 @@ export class HotelBuildingBuilder {
     sd.buildSignMonolith(27.6, 0.9, -0.35, this.contextGroup);
 
     // Reja negra de lanzas con seto y faroles hacia la calle (portón vehicular abierto)
-    sd.buildFence([[-22, 23.5], [40, 23.5]], this.contextGroup, { gaps: [[23.5, 23.5, 32.5, 23.5]] });
+    sd.buildFence([[-24.0, 23.28], [54.72, 31.39]], this.contextGroup, { gaps: [[23.5, 28.0, 32.5, 29.2]] });
 
     // Pabellón acristalado Plaza Café (extremo occidental de la plazoleta)
     sd.buildPlazaCafe(-21, -2.5, 11, 7, this.contextGroup);
@@ -906,11 +939,7 @@ export class HotelBuildingBuilder {
     };
     const lanes = [];
     const types = ['sedan', 'suv', 'taxi', 'sedan', 'suv', 'taxi', 'sedan', 'sports'];
-    [['eb', 4, 11.5], ['wb', 4, 10.5], ['sb', 3, 9.5], ['nb', 3, 12.0]].forEach(([k, n, v]) => {
-      [-1.7, 1.7].forEach((off, li) => {
-        lanes.push({ path: makePath(offsetPath(AXES[k], off)), n, speed: v * (li ? 0.85 : 1.0) });
-      });
-    });
+    // Las calles usan el modelo de tráfico con semáforos (Traffic.js); aquí solo el taxi de la fuente
     // vuelta de dejada de pasajeros alrededor de la fuente (elipse)
     const loop = [];
     for (let i = 0; i < 48; i++) {
@@ -980,6 +1009,10 @@ export class HotelBuildingBuilder {
         carGroup.add(car);
       });
       this.updateTraffic(0);
+      // Tráfico de la Calle 127 × Cra 15 con semáforos y seguimiento vehicular (sin choques)
+      let k = 0;
+      const mix = ['sedan', 'suv', 'sedan', 'taxi', 'suv', 'sedan', 'taxi', 'sedan'];
+      this.traffic = new Traffic(ROAD_AXES, carGroup, () => makeCar(mix[k++ % mix.length], k));
     });
 
     this.contextGroup.add(carGroup);
@@ -1008,6 +1041,7 @@ export class HotelBuildingBuilder {
 
   update(dt) {
     this.updateTraffic(dt);
+    this.traffic?.update(dt);
     this.siteDetails?.update(dt);
   }
 
@@ -1062,12 +1096,14 @@ export class HotelBuildingBuilder {
     const facadeSlots = allSlots.filter((w) => !inBalconyZone(w));
     this.siteDetails.buildBalconyStack(-8.03, -1.6, -3.76, [3.0, 6.0, 9.0, 12.0], this.upperBuildingGroup);
     const p2Windows = new FacadeWindows(this.materials);
+    this.facadeSets.push(p2Windows);
     facadeSlots.forEach((w) => p2Windows.add(w.x, 3.02 + 0.85, w.z, w.nx, w.nz, w.w));
     this.exteriorShellPiso2.add(p2Windows.build());
     const belt = new THREE.Mesh(beltGeo, beltMat);
     belt.position.y = 5.86;
     this.exteriorShellPiso2.add(belt);
     const upperWindows = new FacadeWindows(this.materials);
+    this.facadeSets.push(upperWindows);
 
     // ==============================================================
     // 3. Upper Floors 3 to 6 with Real Bogotá Brick Facade & Exact Revit Windows
