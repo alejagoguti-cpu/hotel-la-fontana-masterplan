@@ -1,0 +1,31 @@
+# Descarga las texturas PBR (Poly Haven, CC0) dentro del repositorio para que el
+# sitio no dependa de un CDN externo. Se ejecuta al modificar este archivo o a mano.
+name: Copiar texturas PBR al repositorio
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/fetch-pbr-textures.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar texturas
+        run: |
+          mkdir -p assets/textures/pbr
+          for id in asphalt_02 concrete_floor_worn_001; do
+            for k in diff nor_gl; do
+              curl -fsSL -o "assets/textures/pbr/${id}_${k}_1k.jpg" \
+                "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${id}/${id}_${k}_1k.jpg"
+            done
+          done
+          ls -la assets/textures/pbr
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add assets/textures/pbr
+          git diff --cached --quiet || (git commit -m "assets: texturas PBR locales (Poly Haven CC0)" && git push)
