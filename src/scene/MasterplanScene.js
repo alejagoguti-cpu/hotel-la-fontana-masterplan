@@ -80,7 +80,7 @@ export class MasterplanScene {
   }
 
   async loadData() {
-    const [arch, finishes, furn, rooms, catastro, urbanNetwork] = await Promise.all([
+    const [arch, finishes, furn, rooms, catastro, urbanNetwork, revitWindows] = await Promise.all([
       fetch('./data/geometry/p2-architecture.json').then(r => r.json()),
       fetch('./data/geometry/p2-finishes.json').then(r => r.json()),
       fetch('./data/geometry/p2-furniture.json').then(r => r.json()),
