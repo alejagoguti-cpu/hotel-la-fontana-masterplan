@@ -165,11 +165,16 @@ export class CityContext {
         s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vCtxW;')
           .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\nif (abs(vCtxW.x - ${H.cx.toFixed(2)}) < ${H.hx.toFixed(2)} && abs(vCtxW.y - ${H.cz.toFixed(2)}) < ${H.hz.toFixed(2)}) discard;`);
       };
+      // cada nivel recorta un rectángulo distinto: clave de programa propia (si no, three.js reutiliza el shader)
+      outer.mesh.material.customProgramCacheKey = () => `ctxhole_${H.cx.toFixed(1)}_${H.cz.toFixed(1)}_${H.hx.toFixed(1)}_${H.hz.toFixed(1)}`;
       outer.mesh.material.needsUpdate = true;
     };
     addHole(L3, L2); addHole(L2, L1); if (L0) addHole(L1, L0);
 
-    const cityP = fetch('./data/geometry/city-context.json').then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    // construcciones: archivo precalculado del repositorio o, si no está, consulta en vivo al Catastro de Bogotá
+    const cityP = fetch('./data/geometry/city-context.json')
+      .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+      .then((d) => (d?.b?.length ? d : this._fetchCatastro(1100).catch((e) => { console.warn('Catastro en vivo no disponible', e); return null; })));
     const far3 = this._fillLevel(L3); // pocas teselas: el horizonte aparece enseguida
     const near = Promise.all([L0 && this._fillLevel(L0), this._fillLevel(L1)]);
     const far2 = near.then(() => this._fillLevel(L2));
@@ -182,6 +187,48 @@ export class CityContext {
     await Promise.all([far2, far3]);
     // las fotos ya no se leen en CPU: libera memoria
     this.levels.forEach((L) => { L.ctx = null; });
+  }
+
+  /** Consulta en vivo al servicio ArcGIS público de Catastro Bogotá (mismo formato que build-city-context.py). */
+  async _fetchCatastro(R) {
+    const SRV = 'https://serviciosgis.catastrobogota.gov.co/arcgis/rest/services/catastro/construccion/MapServer/0/query';
+    const dlon = R / MLON, dlat = R / MLAT;
+    const base = {
+      where: '1=1', geometry: `${LON0 - dlon},${LAT0 - dlat},${LON0 + dlon},${LAT0 + dlat}`, geometryType: 'esriGeometryEnvelope',
+      inSR: 4326, spatialRel: 'esriSpatialRelIntersects', f: 'json'
+    };
+    const cnt = await fetch(`${SRV}?${new URLSearchParams({ ...base, returnCountOnly: true })}`).then((r) => r.json());
+    const pages = Math.ceil((cnt.count || 0) / 2000);
+    const feats = (await Promise.all(Array.from({ length: pages }, (_, i) => fetch(`${SRV}?${new URLSearchParams({
+      ...base, outSR: 4326, outFields: 'CONNPISOS,CONALTURA,LOTECODIGO', returnGeometry: true, geometryPrecision: 6,
+      resultOffset: i * 2000, resultRecordCount: 2000, orderByFields: 'OBJECTID'
+    })}`).then((r) => r.json()).then((d) => d.features || []).catch(() => [])))).flat();
+    const out = [], seen = new Set();
+    for (const f of feats) {
+      const a = f.attributes || {};
+      if (a.LOTECODIGO === '008401019001') continue; // el hotel se modela aparte (Revit)
+      const ring = f.geometry?.rings?.[0];
+      if (!ring || ring.length < 4) continue;
+      let pts = ring.map(([lon, lat]) => [lx(lon), lz(lat)]);
+      if (pts[0][0] === pts[pts.length - 1][0] && pts[0][1] === pts[pts.length - 1][1]) pts = pts.slice(0, -1);
+      const simp = [pts[0]];
+      for (const p of pts.slice(1)) if (Math.hypot(p[0] - simp[simp.length - 1][0], p[1] - simp[simp.length - 1][1]) > 0.6) simp.push(p);
+      if (simp.length < 3) continue;
+      let ar = 0; simp.forEach((p, k) => { const q = simp[(k + 1) % simp.length]; ar += p[0] * q[1] - q[0] * p[1]; });
+      if (Math.abs(ar / 2) < 12) continue;
+      const cx = simp.reduce((s2, p) => s2 + p[0], 0) / simp.length, cz = simp.reduce((s2, p) => s2 + p[1], 0) / simp.length;
+      if (Math.hypot(cx, cz) > R) continue;
+      const key = `${cx.toFixed(1)},${cz.toFixed(1)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      let h = a.CONALTURA > 0 ? a.CONALTURA : Math.max(3, (a.CONNPISOS || 1) * 2.9);
+      h = Math.min(h, 140);
+      const q = simp.flatMap((p) => [Math.round(p[0] * 10), Math.round(p[1] * 10)]);
+      const rec = [Math.round(h * 10), q[0], q[1]];
+      for (let k = 2; k < q.length; k++) rec.push(q[k] - q[k - 2]);
+      out.push(rec);
+    }
+    return { v: 1, r: R, b: out };
   }
 
   _buildBuildings(recs, A, B, C) {
