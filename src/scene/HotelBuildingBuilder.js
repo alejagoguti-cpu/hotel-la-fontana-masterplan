@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoofBuilder } from './RoofBuilder.js';
+import { FacadeWindows } from './FacadeWindows.js';
 
 const MM_TO_M = 0.001;
 
@@ -18,6 +19,16 @@ export function loopToShape(loopMm) {
   }
   shape.closePath();
   return shape;
+}
+
+/** Punto dentro de polígono [[x,z],...] (ray casting). */
+export function pointInPolygon(x, z, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i], [xj, zj] = pts[j];
+    if ((zi > z) !== (zj > z) && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 /**
@@ -126,7 +137,9 @@ export class HotelBuildingBuilder {
       [3200, 14650], [3200, 12300], [-14000, 12300], [-14000, 3800]
     ];
 
+    this.ctxWindows = new FacadeWindows(this.materials);
     this.buildUrbanContext(catastroBuildings, urbanNetwork);
+    this.contextGroup.add(this.ctxWindows.build());
     this.buildHotelMassing(mainFootprint, revitWindows);
     return this.rootGroup;
   }
@@ -359,7 +372,13 @@ export class HotelBuildingBuilder {
             }
 
             // Add authentic windows on every floor of this hotel wing
-            this.addWindowsAlongPolygon(b.pts, 0, height, this.contextGroup);
+            // Ventanas en todos los pisos (el último, bajo el alero, es la galería acristalada)
+            const floors = Math.max(1, b.floors || Math.round(height / 3.1));
+            const fh = height / floors;
+            const topSkip = (this.roofData && height >= 6.5) ? 1 : 0;
+            const sills = [];
+            for (let k = 0; k < floors - topSkip; k++) sills.push(k * fh + 0.9);
+            this.ctxWindows.addAlongPolygon(b.pts, sills);
           } else {
             // Surrounding non-hotel urban context: frosted architectural white volumes
                         const mesh = new THREE.Mesh(geo, contextWhiteMat);
@@ -995,18 +1014,12 @@ export class HotelBuildingBuilder {
     p2ShellMesh.receiveShadow = true;
     this.exteriorShellPiso2.add(p2ShellMesh);
 
-    // Place exact Revit window instances on Piso 2
-    if (Array.isArray(revitWindows) && revitWindows.length > 0) {
-      revitWindows.forEach((w, idx) => {
-        const isLit = (idx % 3 !== 0);
-        const win = this.createRevitWindowComponent(w.width || 1.34, 1.50, isLit);
-        win.position.set(w.pos[0], 3.02 + 0.85, w.pos[1]);
-        win.rotation.y = w.rotY || 0;
-        this.exteriorShellPiso2.add(win);
-      });
-    } else {
-      this.addWindowsAlongPolygon(pts3D, 3.02, 2.92, this.exteriorShellPiso2);
-    }
+    // Ventanas Revit ajustadas al plano de fachada (Piso 2) + vanos en fachadas sin ventanas Revit
+    const facadeSlots = this.computeFacadeWindowSlots(pts3D, revitWindows);
+    const p2Windows = new FacadeWindows(this.materials);
+    facadeSlots.forEach((w) => p2Windows.add(w.x, 3.02 + 0.85, w.z, w.nx, w.nz, w.w));
+    this.exteriorShellPiso2.add(p2Windows.build());
+    const upperWindows = new FacadeWindows(this.materials);
 
     // ==============================================================
     // 3. Upper Floors 3 to 6 with Real Bogotá Brick Facade & Exact Revit Windows
@@ -1026,18 +1039,10 @@ export class HotelBuildingBuilder {
       bandMesh.position.y = yBase + 2.86;
       this.upperBuildingGroup.add(bandMesh);
 
-      if (Array.isArray(revitWindows) && revitWindows.length > 0) {
-        revitWindows.forEach((w, idx) => {
-          const isLit = ((idx + floor) % 2 === 0);
-          const win = this.createRevitWindowComponent(w.width || 1.34, 1.50, isLit);
-          win.position.set(w.pos[0], yBase + 0.85, w.pos[1]);
-          win.rotation.y = w.rotY || 0;
-          this.upperBuildingGroup.add(win);
-        });
-      } else {
-        this.addWindowsAlongPolygon(pts3D, yBase, 2.88, this.upperBuildingGroup);
-      }
+      facadeSlots.forEach((w) => upperWindows.add(w.x, yBase + 0.85, w.z, w.nx, w.nz, w.w));
     }
+
+    this.upperBuildingGroup.add(upperWindows.build());
 
     // ==============================================================
     // 4. Sloped Spanish Terracotta Clay Tile Roof with Timber Eaves (Photos 1, 2, 3)
@@ -1083,7 +1088,7 @@ export class HotelBuildingBuilder {
     const chimneyPositions = [
       [34.0, 10.0], [28.0, 0.0], [12.0, 10.0], [-4.0, 8.0], [42.0, -8.0]
     ];
-    chimneyPositions.forEach(([cx, cz]) => {
+    chimneyPositions.filter(([cx, cz]) => pointInPolygon(cx, cz, pts3D)).forEach(([cx, cz]) => {
       const chim = new THREE.Mesh(new THREE.BoxGeometry(1.4, 4.6, 1.4), brickMat);
       applyArchitecturalBrickUVs(chim.geometry, 1.35, 1.35);
       chim.position.set(cx, roofBaseY + 2.3, cz);
@@ -1183,6 +1188,46 @@ export class HotelBuildingBuilder {
         targetGroup.add(win);
       }
     }
+  }
+
+  /**
+   * Ajusta las ventanas Revit al plano real de la fachada (algunas venían desplazadas
+   * hasta 1.2 m del muro), las orienta con la normal exterior, elimina duplicados y
+   * completa con vanos regulares las fachadas que no tienen ventanas Revit.
+   */
+  computeFacadeWindowSlots(pts, revitWindows = []) {
+    const n = pts.length;
+    let area = 0;
+    for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; }
+    const sgn = area > 0 ? 1 : -1;
+    const edges = pts.map((a, i) => {
+      const b = pts[(i + 1) % n];
+      const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      return { a, ux, uz, len, nx: sgn * uz, nz: -sgn * ux, slots: [] };
+    });
+    (revitWindows || []).forEach((w) => {
+      if (!w || !w.pos) return;
+      let best = null;
+      edges.forEach((e) => {
+        const t = Math.max(0.6, Math.min(e.len - 0.6, (w.pos[0] - e.a[0]) * e.ux + (w.pos[1] - e.a[1]) * e.uz));
+        const px = e.a[0] + e.ux * t, pz = e.a[1] + e.uz * t;
+        const d = Math.hypot(w.pos[0] - px, w.pos[1] - pz);
+        if (!best || d < best.d) best = { e, t, d };
+      });
+      if (!best || best.d > 1.5 || best.e.len < 1.4) return;
+      if (best.e.slots.some((s) => Math.abs(s.t - best.t) < 1.0)) return;
+      best.e.slots.push({ t: best.t, w: Math.max(0.9, Math.min(1.4, (w.width || 1.2) * 1.3)) });
+    });
+    const out = [];
+    edges.forEach((e) => {
+      if (!e.slots.length && e.len >= 2.4) {
+        const k = Math.max(1, Math.floor((e.len - 0.6) / 2.7));
+        for (let i = 0; i < k; i++) e.slots.push({ t: (e.len / k) * (i + 0.5), w: 1.2 });
+      }
+      e.slots.forEach((s) => out.push({ x: e.a[0] + e.ux * s.t, z: e.a[1] + e.uz * s.t, nx: e.nx, nz: e.nz, w: s.w }));
+    });
+    return out;
   }
 
   addWindowsAlongPolygon(pts3D, yFloorBase, floorHeight, targetGroup) {
