@@ -331,6 +331,7 @@ export class HotelBuildingBuilder {
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((ORTHO_X_MIN + ORTHO_X_MAX) / 2, -0.06, (ORTHO_Z_MIN + ORTHO_Z_MAX) / 2);
     ground.receiveShadow = true;
+    this.groundPlane = ground;
     this.contextGroup.add(ground);
 
     // 1b. Cubiertas de teja a cuatro aguas del conjunto La Fontana (precalculadas)

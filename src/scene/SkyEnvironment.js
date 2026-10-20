@@ -191,6 +191,7 @@ export class SkyEnvironment {
     );
     farGround.rotation.x = -Math.PI / 2;
     farGround.position.set(8, -0.45, 16);
+    this.farGround = farGround;
     this.scene.add(farGround);
 
     // ---- 3. SkyLight (IBL capturado del cielo) ----

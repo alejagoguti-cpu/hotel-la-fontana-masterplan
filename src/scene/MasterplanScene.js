@@ -7,6 +7,7 @@ import { RoomHighlighter } from './RoomHighlighter.js';
 import { store } from '../state/store.js';
 import { SkyEnvironment } from './SkyEnvironment.js';
 import { PostFX } from './PostFX.js';
+import { CityContext } from './CityContext.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -20,7 +21,7 @@ export class MasterplanScene {
       45,
       container.clientWidth / container.clientHeight,
       0.5,
-      3000
+      90000
     );
     this.camera.position.set(34, 20, 30);
 
@@ -38,7 +39,7 @@ export class MasterplanScene {
     this.controls.dampingFactor = 0.05;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.03; // don't go below ground
     this.controls.minDistance = 5;
-    this.controls.maxDistance = 240;
+    this.controls.maxDistance = 1800;
     this.controls.target.set(16, 4.2, 2);
 
     this.materials = new MaterialLibrary(this.renderer);
@@ -53,6 +54,11 @@ export class MasterplanScene {
 
     this.setupLighting();
     this.skyEnv = new SkyEnvironment(this.renderer, this.scene, this.sunLight, this.hemiLight);
+    // Contexto real de Bogotá: ortofoto, relieve (Cerros Orientales), catastro 3D y arbolado
+    try {
+      this.city = new CityContext(this.scene, { renderer: this.renderer, mobile: /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) });
+      if (this.skyEnv.farGround) this.skyEnv.farGround.visible = false;
+    } catch (e) { console.warn('Contexto urbano no disponible', e); }
     try { this.postfx = new PostFX(this.renderer, this.scene, this.camera, this.container); } catch (e) { console.warn('PostFX desactivado', e); }
     this.setupEvents();
     this.animate();
@@ -101,7 +107,10 @@ export class MasterplanScene {
     ]);
 
     // 1. Hotel building exterior + real Catastro urban context + real roads & trees + authentic Revit windows
-    const building = this.buildingBuilder.build(arch, catastro, urbanNetwork, revitWindows, roofs);
+    //    (los volúmenes blancos del entorno los reemplaza CityContext con el catastro real texturizado)
+    const ctxBuildings = this.city ? catastro.filter((b) => b.isHotel) : catastro;
+    const building = this.buildingBuilder.build(arch, ctxBuildings, urbanNetwork, revitWindows, roofs);
+    if (this.city && this.buildingBuilder.groundPlane) this.buildingBuilder.groundPlane.visible = false;
     this.scene.add(building);
 
     // 2. Interior Piso 2
@@ -224,8 +233,9 @@ export class MasterplanScene {
       // Full exterior 6-story hotel
       this.buildingBuilder.upperBuildingGroup.visible = true;
       this.buildingBuilder.exteriorShellPiso2.visible = true;
-      gsap.to(this.camera.position, { x: 48, y: 30, z: 44, duration: 1.2, ease: 'power2.inOut' });
-      gsap.to(this.controls.target, { x: 16, y: 6.0, z: 2, duration: 1.2, ease: 'power2.inOut' });
+      // vista aérea tipo masterplan (el hotel dentro de su barrio, cerros al fondo)
+      gsap.to(this.camera.position, { x: -150, y: 135, z: 215, duration: 1.6, ease: 'power2.inOut' });
+      gsap.to(this.controls.target, { x: 24, y: 4.0, z: 0, duration: 1.6, ease: 'power2.inOut' });
     }
   }
 
@@ -248,12 +258,27 @@ export class MasterplanScene {
     if (tip) tip.classList.remove('show');
   }
 
+  /** Plano cercano, niebla y cielo según la distancia de la cámara (de detalle a vista aérea de la ciudad). */
+  _updateRange() {
+    const cam = this.camera;
+    const dist = cam.position.distanceTo(this.controls.target);
+    const near = THREE.MathUtils.clamp(dist * 0.012, 0.3, 30);
+    if (Math.abs(near - cam.near) > 0.02 * cam.near) { cam.near = near; cam.updateProjectionMatrix(); }
+    if (this.scene.fog) {
+      this.scene.fog.near = 180 + dist * 0.9;
+      this.scene.fog.far = 7000 + dist * 6;
+    }
+    const s = this.skyEnv;
+    if (s) { s.sky?.position.copy(cam.position); s.clouds?.position.copy(cam.position); }
+  }
+
   animate() {
     requestAnimationFrame(() => this.animate());
     const dt = Math.min(this.clock.getDelta(), 0.1);
     this.skyEnv?.update(dt);
     this.buildingBuilder?.update?.(dt);
     this.controls.update();
+    this._updateRange();
     if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }
