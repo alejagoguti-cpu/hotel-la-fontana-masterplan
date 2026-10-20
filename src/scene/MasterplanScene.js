@@ -270,6 +270,33 @@ export class MasterplanScene {
     }
     const s = this.skyEnv;
     if (s) { s.sky?.position.copy(cam.position); s.clouds?.position.copy(cam.position); }
+    this._updateProjectTag(dist);
+  }
+
+  /** Etiqueta flotante del proyecto (estilo masterplan inmobiliario), visible en vistas aéreas. */
+  _updateProjectTag(dist) {
+    if (!this._tag) {
+      const el = document.createElement('div');
+      el.className = 'project-tag';
+      el.innerHTML = '<span class="project-tag__pill">Hotel Estelar La Fontana</span><span class="project-tag__stem"></span><span class="project-tag__dot"></span>';
+      const css = document.createElement('style');
+      css.textContent = `.project-tag{position:fixed;left:0;top:0;pointer-events:none;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-100%);transition:opacity .3s;z-index:5}
+        .project-tag__pill{background:#d6202e;color:#fff;font:600 12px/1 Inter,system-ui,sans-serif;padding:7px 12px;border-radius:999px;box-shadow:0 4px 14px rgba(0,0,0,.35);white-space:nowrap;letter-spacing:.2px}
+        .project-tag__stem{width:2px;height:26px;background:rgba(255,255,255,.9)}
+        .project-tag__dot{width:9px;height:9px;border-radius:50%;background:#fff;border:2px solid #d6202e}`;
+      document.head.appendChild(css);
+      document.body.appendChild(el);
+      this._tag = el;
+      this._tagPos = new THREE.Vector3(18, 26, 2);
+    }
+    const p = this._tagPos.clone().project(this.camera);
+    const show = dist > 140 && p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
+    this._tag.style.opacity = show ? '1' : '0';
+    if (show) {
+      const r = this.container.getBoundingClientRect();
+      this._tag.style.left = `${r.left + (p.x * 0.5 + 0.5) * r.width}px`;
+      this._tag.style.top = `${r.top + (-p.y * 0.5 + 0.5) * r.height}px`;
+    }
   }
 
   animate() {
