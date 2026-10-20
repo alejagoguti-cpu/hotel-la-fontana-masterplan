@@ -4,6 +4,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoofBuilder } from './RoofBuilder.js';
 import { FacadeWindows } from './FacadeWindows.js';
+import { SiteDetails } from './SiteDetails.js';
 
 const MM_TO_M = 0.001;
 
@@ -138,6 +139,7 @@ export class HotelBuildingBuilder {
     ];
 
     this.ctxWindows = new FacadeWindows(this.materials);
+    this.siteDetails = new SiteDetails(this.materials);
     this.buildUrbanContext(catastroBuildings, urbanNetwork);
     this.contextGroup.add(this.ctxWindows.build());
     this.buildHotelMassing(mainFootprint, revitWindows);
@@ -460,54 +462,22 @@ export class HotelBuildingBuilder {
   }
 
   buildCourtyard(andenMat, stoneMat) {
-    const courtyardGeo = new THREE.PlaneGeometry(36, 28);
-    const courtyard = new THREE.Mesh(courtyardGeo, andenMat);
-    courtyard.rotation.x = -Math.PI / 2;
-    courtyard.position.set(16, 0.04, 2);
-    courtyard.receiveShadow = true;
-    this.contextGroup.add(courtyard);
+    const sd = this.siteDetails;
+    // Andenes en adoquín rojo; plazoleta en adoquín de arcilla gris-café (fotos de sitio)
+    sd.applySidewalkPaving();
+    sd.buildCourtPaving(7, 9.9, 58, 27.3, this.contextGroup);
 
-    // Traditional Multi-Tier Stone Fountain (Photo 3 Reference)
-    const fountainGroup = new THREE.Group();
-    fountainGroup.position.set(16, 0.04, 3.6); // frente a la escalinata (foto 3)
+    // Fuente sobre jardinera hexagonal de ladrillo, frente a la escalinata
+    sd.buildFountain(16, 6.2, this.contextGroup);
 
-    // Outer octagonal stone curb
-    const outerCurb = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.8, 0.42, 8), stoneMat);
-    outerCurb.position.y = 0.21;
-    fountainGroup.add(outerCurb);
+    // Monolito de marca entre la vegetación, a la derecha del acceso
+    sd.buildSignMonolith(27.6, 0.9, -0.35, this.contextGroup);
 
-    // Lower tier water basin
-    const lowerBasin = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 2.9, 0.38, 24), stoneMat);
-    lowerBasin.position.y = 0.38;
-    const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x2288cc,
-      roughness: 0.08,
-      metalness: 0.4,
-      transparent: true,
-      opacity: 0.85
-    });
-    const lowerWater = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 0.32, 24), waterMat);
-    lowerWater.position.y = 0.42;
-    fountainGroup.add(lowerBasin, lowerWater);
+    // Reja negra de lanzas con seto y faroles hacia la calle (portón vehicular abierto)
+    sd.buildFence([[-22, 23.5], [40, 23.5]], this.contextGroup, { gaps: [[23.5, 23.5, 32.5, 23.5]] });
 
-    // Central stone pedestal & upper basin
-    const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.52, 1.1, 16), stoneMat);
-    pedestal.position.y = 0.95;
-    const upperBasin = new THREE.Mesh(new THREE.CylinderGeometry(1.3, 1.4, 0.32, 24), stoneMat);
-    upperBasin.position.y = 1.45;
-    const upperWater = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.25, 24), waterMat);
-    upperWater.position.y = 1.5;
-    fountainGroup.add(pedestal, upperBasin, upperWater);
-
-    // Water jet spout
-    const spout = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.22, 0.8, 12),
-      new THREE.MeshStandardMaterial({ color: 0x88ccff, roughness: 0.1, transparent: true, opacity: 0.75 })
-    );
-    spout.position.y = 1.85;
-    fountainGroup.add(spout);
-
-    this.contextGroup.add(fountainGroup);
+    // Pabellón acristalado Plaza Café (extremo occidental de la plazoleta)
+    sd.buildPlazaCafe(-21, -2.5, 11, 7, this.contextGroup);
 
     // Vintage Courtyard Cast-Iron Lamp Posts (Photo 3 Reference)
     const lampMat = new THREE.MeshStandardMaterial({ color: 0x1a1c1e, roughness: 0.35, metalness: 0.85 });
@@ -519,8 +489,7 @@ export class HotelBuildingBuilder {
     });
 
     const lampPositions = [
-      [7.5, 8.5], [24.5, 8.5], [7.0, 0.8], [25.0, 0.8],
-      [4.5, 4.5], [27.5, 4.5]
+      [4.2, 2.6], [27.8, 2.6], [5.5, 14.0], [26.5, 14.0]
     ];
 
     lampPositions.forEach(([lx, lz]) => {
@@ -704,7 +673,7 @@ export class HotelBuildingBuilder {
     // Plazoleta de acceso despejada (fotos): árboles solo en los costados, nunca
     // delante de la escalinata ni dentro del edificio
     const courtyardTrees = [
-      [2.5, 4.0], [2.5, 11.0], [30.0, 6.0], [30.5, 12.5]
+      [2.0, 5.5], [2.0, 12.0], [27.3, 3.0], [26.8, 11.5], [27.5, 18.0], [25.0, -0.8], [-1.5, 18.5]
     ];
     candidatePoints.push(...courtyardTrees);
 
@@ -737,7 +706,8 @@ export class HotelBuildingBuilder {
       const [tx, tz] = candidatePoints[i];
 
       if (isInsideRoadway(tx, tz)) continue;
-      if (tx >= -16 && tx <= 50 && tz >= -16 && tz <= 15) {
+      const explicitTree = courtyardTrees.some(([cx, cz]) => cx === tx && cz === tz);
+      if (!explicitTree && tx >= -16 && tx <= 50 && tz >= -16 && tz <= 15) {
         const inCourtyard = (tx >= 6.5 && tx <= 25.5 && tz >= -5.8 && tz <= 9.8);
         if (!inCourtyard) continue;
       }
@@ -861,53 +831,87 @@ export class HotelBuildingBuilder {
     this.contextGroup.add(treeGroup);
   }
 
+  /**
+   * Tráfico vehicular animado sobre las calzadas reales (trazados medidos de los
+   * polígonos de Catastro): Calle 127 (dos calzadas) y Carrera 15 (dos calzadas),
+   * dos carriles por sentido con separación constante entre carros (no se chocan),
+   * un taxi que da la vuelta a la fuente y carros estacionados junto a la fachada.
+   */
   buildRealisticVehicles(calzadaPolys = []) {
     const carGroup = new THREE.Group();
     const carShadowMat = this.materials.get('CAR_SHADOW');
+    this.trafficCars = [];
 
-    const carSpots = [
-      // Courtyard Parking (Photo 1 reference: vehicles parked in front of entrance/fountain)
-      { pos: [10.5, 10.6], rot: 0, type: 'sedan', color: 1 },
-      { pos: [13.2, 10.6], rot: 0, type: 'suv', color: 0 },
-      { pos: [15.8, 10.6], rot: 0, type: 'taxi', color: 5 },
-      { pos: [18.4, 10.6], rot: 0, type: 'sedan', color: 2 },
-      { pos: [21.0, 10.6], rot: 0, type: 'suv', color: 3 },
+    // Ejes de calzada (x, z) — sentido de circulación = orden de los puntos
+    const AXES = {
+      eb: [[-150, 16.25], [-120, 21.25], [-80, 26.0], [-40, 30.75], [0, 34.75], [40, 39.0], [60, 41.0], [120, 48.75], [160, 52.25]],
+      wb: [[160, 80.5], [120, 77.0], [60, 68.75], [40, 66.75], [0, 63.5], [-40, 60.25], [-80, 55.75], [-120, 51.25], [-150, 46.25]],
+      sb: [[88.5, -100], [87.5, -80], [85.5, -40], [83.5, 0], [81.5, 30], [80.5, 44]],
+      nb: [[100, 30], [101.75, 0], [103.75, -40], [106, -80], [107, -100]]
+    };
+    const offsetPath = (pts, off) => pts.map((p, i) => {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
+      const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
+      return [p[0] - (dz / l) * off, p[1] + (dx / l) * off];   // desplazamiento a la derecha
+    });
+    const makePath = (pts, closed = false) => {
+      const P = closed ? [...pts, pts[0]] : pts;
+      const cum = [0];
+      for (let i = 1; i < P.length; i++) cum.push(cum[i - 1] + Math.hypot(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]));
+      return { P, cum, len: cum[cum.length - 1], closed };
+    };
+    const lanes = [];
+    const types = ['sedan', 'suv', 'taxi', 'sedan', 'suv', 'taxi', 'sedan', 'sports'];
+    [['eb', 4, 11.5], ['wb', 4, 10.5], ['sb', 3, 9.5], ['nb', 3, 12.0]].forEach(([k, n, v]) => {
+      [-1.7, 1.7].forEach((off, li) => {
+        lanes.push({ path: makePath(offsetPath(AXES[k], off)), n, speed: v * (li ? 0.85 : 1.0) });
+      });
+    });
+    // vuelta de dejada de pasajeros alrededor de la fuente (elipse)
+    const loop = [];
+    for (let i = 0; i < 48; i++) {
+      const a = -(i / 48) * Math.PI * 2;
+      loop.push([16 + Math.cos(a) * 9.0, 6.4 + Math.sin(a) * 5.4]);
+    }
+    lanes.push({ path: makePath(loop, true), n: 1, speed: 3.2, forceType: 'taxi' });
 
-      // Calle 127 South (Eastbound traffic along +X, rot = Math.PI / 2)
-      { pos: [-45, 30.5], rot: Math.PI / 2, type: 'sedan', color: 0 },
-      { pos: [-15, 31.0], rot: Math.PI / 2, type: 'suv', color: 1 },
-      { pos: [15, 36.0], rot: Math.PI / 2 + 0.08, type: 'taxi', color: 5 },
-      { pos: [42, 38.5], rot: Math.PI / 2 + 0.12, type: 'sedan', color: 2 },
-      { pos: [68, 43.0], rot: Math.PI / 2 + 0.18, type: 'suv', color: 3 },
-      { pos: [110, 46.5], rot: Math.PI / 2, type: 'sports', color: 4 },
-
-      // Calle 127 North (Westbound traffic along -X, rot = -Math.PI / 2)
-      { pos: [70, 74.0], rot: -Math.PI / 2, type: 'sedan', color: 1 },
-      { pos: [35, 68.0], rot: -Math.PI / 2 - 0.08, type: 'taxi', color: 5 },
-      { pos: [5, 64.0], rot: -Math.PI / 2, type: 'suv', color: 0 },
-      { pos: [-25, 61.0], rot: -Math.PI / 2, type: 'sedan', color: 2 },
-      { pos: [-55, 57.0], rot: -Math.PI / 2, type: 'suv', color: 3 },
-
-      // Carrera 15 (Northbound traffic along -Z, rot = Math.PI)
-      { pos: [82.0, -45.0], rot: Math.PI, type: 'sports', color: 0 },
-      { pos: [82.0, -10.0], rot: Math.PI, type: 'taxi', color: 5 },
-      { pos: [82.0, 18.0], rot: Math.PI, type: 'suv', color: 1 },
-
-      // Carrera 15 (Southbound traffic along +Z, rot = 0)
-      { pos: [80.0, 5.0], rot: 0, type: 'sedan', color: 2 },
-      { pos: [85.0, -25.0], rot: 0, type: 'suv', color: 3 }
-    ];
+    const parked = [-6.0, -3.2, -0.4, 2.4, 5.2].map((x, i) => ({ pos: [x, -1.45], rot: Math.PI, type: ['suv', 'sedan', 'taxi', 'suv', 'sedan'][i] }));
 
     const loader = new GLTFLoader();
     const dracoLoader = new DRACOLoader();
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
     loader.setDRACOLoader(dracoLoader);
     const modelCache = {};
+    const loadModel = (url) => loader.loadAsync(url).catch(err => { console.warn('Vehicle model load fallback for:', url, err); return null; });
 
-    const loadModel = (url) => loader.loadAsync(url).catch(err => {
-      console.warn('Vehicle model load fallback for:', url, err);
-      return null;
-    });
+    const makeCar = (type, colorIdx) => {
+      const car = new THREE.Group();
+      if (carShadowMat) {
+        const shadow = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 5.2), carShadowMat);
+        shadow.rotation.x = -Math.PI / 2;
+        shadow.position.y = 0.03;
+        car.add(shadow);
+      }
+      const gltf = modelCache[type] || modelCache.sedan;
+      if (gltf && gltf.scene) {
+        const m = SkeletonUtils.clone(gltf.scene);
+        m.traverse(child => {
+          if (child.isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            if (child.material) child.material = Array.isArray(child.material) ? child.material.map(x => x.clone()) : child.material.clone();
+            if (type === 'sports' && child.name === 'body' && child.material) {
+              child.material.color.setHex(colorIdx % 2 ? 0x181c22 : 0xcc1824);
+              child.material.metalness = 0.9; child.material.roughness = 0.18;
+            }
+          }
+        });
+        m.scale.setScalar(type === 'sports' ? 0.96 : 0.92);
+        if (type === 'sports') m.rotation.y = Math.PI;
+        car.add(m);
+      }
+      return car;
+    };
 
     Promise.all([
       loadModel('./assets/models/sedan.glb').then(g => { if (g) modelCache.sedan = g; }),
@@ -915,59 +919,52 @@ export class HotelBuildingBuilder {
       loadModel('./assets/models/taxi.glb').then(g => { if (g) modelCache.taxi = g; }),
       loadModel('./assets/models/ferrari.glb').then(g => { if (g) modelCache.sports = g; })
     ]).then(() => {
-      for (let i = 0; i < carSpots.length; i++) {
-        const spot = carSpots[i];
-        const car = new THREE.Group();
-
-        if (carShadowMat) {
-          const shadow = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 2.5), carShadowMat);
-          shadow.rotation.x = -Math.PI / 2;
-          shadow.position.set(0, 0.03, 0);
-          shadow.rotation.z = spot.rot;
-          car.add(shadow);
+      let c = 0;
+      lanes.forEach((lane, li) => {
+        for (let i = 0; i < lane.n; i++) {
+          const type = lane.forceType || types[(li * 3 + i) % types.length];
+          const car = makeCar(type, c++);
+          carGroup.add(car);
+          // separación uniforme + desfase por carril: velocidad común en el carril ⇒ sin choques
+          this.trafficCars.push({ obj: car, lane, s: (lane.path.len / lane.n) * i + li * 7.3 });
         }
-
-        const gltf = modelCache[spot.type] || modelCache.sedan;
-        if (gltf && gltf.scene) {
-          const modelClone = SkeletonUtils.clone(gltf.scene);
-
-          modelClone.traverse(child => {
-            if (child.isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-              if (child.material) {
-                if (Array.isArray(child.material)) {
-                  child.material = child.material.map(m => m.clone());
-                } else {
-                  child.material = child.material.clone();
-                }
-              }
-
-              if (spot.type === 'sports' && child.name === 'body' && child.material) {
-                child.material.color.setHex(spot.color === 0 ? 0xcc1824 : 0x181c22);
-                child.material.metalness = 0.9;
-                child.material.roughness = 0.18;
-              }
-            }
-          });
-
-          if (spot.type === 'sports') {
-            modelClone.scale.set(0.96, 0.96, 0.96);
-            modelClone.rotation.y = spot.rot + Math.PI;
-          } else {
-            modelClone.scale.set(0.92, 0.92, 0.92);
-            modelClone.rotation.y = spot.rot;
-          }
-
-          car.add(modelClone);
-        }
-
-        car.position.set(spot.pos[0], 0, spot.pos[1]);
+      });
+      parked.forEach((p, i) => {
+        const car = makeCar(p.type, i);
+        car.position.set(p.pos[0], 0, p.pos[1]);
+        car.rotation.y = p.rot;
         carGroup.add(car);
-      }
+      });
+      this.updateTraffic(0);
     });
 
     this.contextGroup.add(carGroup);
+  }
+
+  updateTraffic(dt) {
+    if (!this.trafficCars) return;
+    for (const c of this.trafficCars) {
+      const { P, cum, len } = c.lane.path;
+      const ns = c.s + c.lane.speed * dt;
+      const wrapped = ns >= len;
+      c.s = ns % len;
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < c.s) i++;
+      const a = P[i - 1], b = P[i];
+      const t = (c.s - cum[i - 1]) / Math.max(cum[i] - cum[i - 1], 1e-6);
+      const x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t;
+      const heading = Math.atan2(b[0] - a[0], b[1] - a[1]);
+      c.obj.position.set(x, 0.02, z);
+      // giro suave
+      let d = heading - c.obj.rotation.y;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      c.obj.rotation.y += (dt > 0 && !(wrapped && !c.lane.path.closed)) ? d * Math.min(1, dt * 6) : d;
+    }
+  }
+
+  update(dt) {
+    this.updateTraffic(dt);
+    this.siteDetails?.update(dt);
   }
 
   buildHotelMassing(footprintMm, revitWindows = []) {
@@ -1015,7 +1012,11 @@ export class HotelBuildingBuilder {
     this.exteriorShellPiso2.add(p2ShellMesh);
 
     // Ventanas Revit ajustadas al plano de fachada (Piso 2) + vanos en fachadas sin ventanas Revit
-    const facadeSlots = this.computeFacadeWindowSlots(pts3D, revitWindows);
+    const allSlots = this.computeFacadeWindowSlots(pts3D, revitWindows);
+    // Volumen de balcones voladizos en el extremo occidental de la fachada principal
+    const inBalconyZone = (w) => Math.abs(w.z + 3.76) < 0.35 && w.x < -1.5;
+    const facadeSlots = allSlots.filter((w) => !inBalconyZone(w));
+    this.siteDetails.buildBalconyStack(-8.03, -1.6, -3.76, [3.0, 6.0, 9.0, 12.0], this.upperBuildingGroup);
     const p2Windows = new FacadeWindows(this.materials);
     facadeSlots.forEach((w) => p2Windows.add(w.x, 3.02 + 0.85, w.z, w.nx, w.nz, w.w));
     this.exteriorShellPiso2.add(p2Windows.build());
@@ -1186,6 +1187,22 @@ export class HotelBuildingBuilder {
       new THREE.MeshStandardMaterial({ map: signTex, emissiveMap: signTex, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.5 }));
     sign.position.set(0, cy0, CD + 0.006);
     g.add(sign);
+
+    // fleco de hierro calado (como en las fotos)
+    const valMat = this.siteDetails ? this.siteDetails.makeValanceMaterial() : null;
+    if (valMat) {
+      const vf = new THREE.Mesh(new THREE.PlaneGeometry(CW, 0.42), valMat.clone());
+      vf.material.map = valMat.map.clone(); vf.material.map.needsUpdate = true; vf.material.map.repeat.set(CW / 0.9, 1);
+      vf.position.set(0, cy0 - CH / 2 - 0.2, CD + 0.01);
+      g.add(vf);
+      [-1, 1].forEach((sd) => {
+        const vs = new THREE.Mesh(new THREE.PlaneGeometry(CD, 0.42), valMat);
+        vs.material.map.repeat.set(CD / 0.9, 1);
+        vs.position.set(sd * (CW / 2 + 0.01), cy0 - CH / 2 - 0.2, CD / 2);
+        vs.rotation.y = Math.PI / 2;
+        g.add(vs);
+      });
+    }
 
     // luces: guirnalda en el borde inferior + plafón
     const bulbGeo = new THREE.SphereGeometry(0.05, 8, 6);

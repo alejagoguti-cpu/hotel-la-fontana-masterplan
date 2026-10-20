@@ -247,6 +247,7 @@ export class MasterplanScene {
     requestAnimationFrame(() => this.animate());
     const dt = Math.min(this.clock.getDelta(), 0.1);
     this.skyEnv?.update(dt);
+    this.buildingBuilder?.update?.(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
