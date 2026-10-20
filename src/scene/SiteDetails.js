@@ -91,6 +91,23 @@ export class SiteDetails {
     return mesh;
   }
 
+  /** Plazoleta con adoquín de arcilla sobre un polígono [x,z] (llega hasta el andén). */
+  buildCourtPavingPoly(pts, group) {
+    const t = this.courtTex.clone();
+    t.needsUpdate = true;
+    t.repeat.set(1 / 3.0, 1 / 3.0);
+    const mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.88, metalness: 0.0 });
+    const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
+    const geo = new THREE.ShapeGeometry(shape);
+    geo.rotateX(-Math.PI / 2);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.y = 0.05;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+    // bordillo de piedra contra el andén
+    return mesh;
+  }
+
   /** Fuente: jardinera hexagonal de ladrillo + taza de bronce de dos niveles con chorro. */
   buildFountain(x, z, group) {
     const g = new THREE.Group();
