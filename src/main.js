@@ -6,6 +6,7 @@ import { GalleryModal } from './ui/GalleryModal.js';
 import { LocationModal } from './ui/LocationModal.js';
 import { BimInspectorPanel } from './ui/BimInspectorPanel.js';
 import { store } from './state/store.js';
+import { WindowEditor } from './ui/WindowEditor.js';
 
 class App {
   constructor() {
@@ -35,7 +36,9 @@ class App {
     );
 
     this.setupTopBar();
-    this.scene.loadData();
+    this.scene.loadData().then(() => {
+      this.windowEditor = new WindowEditor(this.scene);
+    });
   }
 
   setupTopBar() {
