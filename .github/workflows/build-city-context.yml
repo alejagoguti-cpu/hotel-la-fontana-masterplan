@@ -1,0 +1,25 @@
+# Descarga las construcciones reales de Catastro Bogotá alrededor del hotel y genera
+# data/geometry/city-context.json (contexto urbano 3D). Se ejecuta al cambiar el script o a mano.
+name: Generar contexto urbano (Catastro Bogotá)
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/build-city-context.py', '.github/workflows/build-city-context.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descargar catastro
+        run: |
+          mkdir -p /tmp/cat
+          python3 scripts/build-city-context.py 1100 /tmp/cat
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git add data/geometry/city-context.json
+          git diff --cached --quiet || (git commit -m "data: contexto urbano real (Catastro Bogotá)" && git pull --rebase && git push)
