@@ -304,7 +304,7 @@ export class HotelBuildingBuilder {
     // 1b. Cubiertas de teja a cuatro aguas del conjunto La Fontana (precalculadas)
     if (this.roofData?.context) {
       this.roofData.context.forEach((r) => {
-        if (r.slope) this.roofBuilder.addRoof(r, this.contextGroup, { gallery: true });
+        if (r.slope) this.roofBuilder.addRoof(r, this.contextGroup, { gallery: true, ivyMat: this.materials.get('REVIT_WIN_IVY') });
       });
     }
 
@@ -469,7 +469,7 @@ export class HotelBuildingBuilder {
 
     // Traditional Multi-Tier Stone Fountain (Photo 3 Reference)
     const fountainGroup = new THREE.Group();
-    fountainGroup.position.set(16, 0.04, 2);
+    fountainGroup.position.set(16, 0.04, 3.6); // frente a la escalinata (foto 3)
 
     // Outer octagonal stone curb
     const outerCurb = new THREE.Mesh(new THREE.CylinderGeometry(3.6, 3.8, 0.42, 8), stoneMat);
@@ -519,8 +519,8 @@ export class HotelBuildingBuilder {
     });
 
     const lampPositions = [
-      [7.5, 9.5], [24.5, 9.5], [7.5, -5.5], [24.5, -5.5],
-      [16.0, 11.5], [16.0, -7.5], [4.5, 2.0], [27.5, 2.0]
+      [7.5, 8.5], [24.5, 8.5], [7.0, 0.8], [25.0, 0.8],
+      [4.5, 4.5], [27.5, 4.5]
     ];
 
     lampPositions.forEach(([lx, lz]) => {
@@ -701,10 +701,10 @@ export class HotelBuildingBuilder {
       for (const pt of treePoints) candidatePoints.push(pt);
     }
 
+    // Plazoleta de acceso despejada (fotos): árboles solo en los costados, nunca
+    // delante de la escalinata ni dentro del edificio
     const courtyardTrees = [
-      [9.5, 7.5], [22.5, 7.5], [9.5, -3.5], [22.5, -3.5],
-      [16, 9.5], [16, -5.5], [7.0, 2.0], [25.0, 2.0],
-      [11.5, 4.5], [20.5, 4.5], [11.5, -0.5], [20.5, -0.5]
+      [2.5, 4.0], [2.5, 11.0], [30.0, 6.0], [30.5, 12.5]
     ];
     candidatePoints.push(...courtyardTrees);
 
@@ -867,11 +867,11 @@ export class HotelBuildingBuilder {
 
     const carSpots = [
       // Courtyard Parking (Photo 1 reference: vehicles parked in front of entrance/fountain)
-      { pos: [10.5, 7.8], rot: 0, type: 'sedan', color: 1 },
-      { pos: [13.2, 7.8], rot: 0, type: 'suv', color: 0 },
-      { pos: [15.8, 7.8], rot: 0, type: 'taxi', color: 5 },
-      { pos: [18.4, 7.8], rot: 0, type: 'sedan', color: 2 },
-      { pos: [21.0, 7.8], rot: 0, type: 'suv', color: 3 },
+      { pos: [10.5, 10.6], rot: 0, type: 'sedan', color: 1 },
+      { pos: [13.2, 10.6], rot: 0, type: 'suv', color: 0 },
+      { pos: [15.8, 10.6], rot: 0, type: 'taxi', color: 5 },
+      { pos: [18.4, 10.6], rot: 0, type: 'sedan', color: 2 },
+      { pos: [21.0, 10.6], rot: 0, type: 'suv', color: 3 },
 
       // Calle 127 South (Eastbound traffic along +X, rot = Math.PI / 2)
       { pos: [-45, 30.5], rot: Math.PI / 2, type: 'sedan', color: 0 },
@@ -990,14 +990,14 @@ export class HotelBuildingBuilder {
     this.lowerBuildingGroup.add(p1Mesh);
 
     // Stone Cornice Band
-    const corniceGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.16, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.06, bevelSegments: 1 });
-    corniceGeo.rotateX(-Math.PI / 2);
-    const cornice1 = new THREE.Mesh(corniceGeo, stoneMat);
-    cornice1.position.y = 2.88;
-    this.lowerBuildingGroup.add(cornice1);
+    // Fachada real: ladrillo continuo, sin cornisas claras por piso; una sola banda de
+    // ladrillo oscuro sobre el 2º piso (ver fotos de la fachada principal)
+    const beltMat = new THREE.MeshStandardMaterial({ color: 0x5a2a1d, roughness: 0.85 });
+    const beltGeo = new THREE.ExtrudeGeometry(shape, { depth: 0.22, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.02, bevelSegments: 1 });
+    beltGeo.rotateX(-Math.PI / 2);
 
     // Iconic Lobby Entrance Canopy ("HOTEL ESTELAR LA FONTANA") in Courtyard (Photos 2 & 3)
-    this.buildEntranceCanopy(16.0, 0, -3.85, 0);
+    this.buildEntranceCanopy(16.0, 0, -3.78, 0);
 
     // Ground floor storefront / restaurant ribbon glazing
     this.addGroundRibbonWindows(pts3D, this.lowerBuildingGroup);
@@ -1019,6 +1019,9 @@ export class HotelBuildingBuilder {
     const p2Windows = new FacadeWindows(this.materials);
     facadeSlots.forEach((w) => p2Windows.add(w.x, 3.02 + 0.85, w.z, w.nx, w.nz, w.w));
     this.exteriorShellPiso2.add(p2Windows.build());
+    const belt = new THREE.Mesh(beltGeo, beltMat);
+    belt.position.y = 5.86;
+    this.exteriorShellPiso2.add(belt);
     const upperWindows = new FacadeWindows(this.materials);
 
     // ==============================================================
@@ -1035,11 +1038,8 @@ export class HotelBuildingBuilder {
       floorMesh.receiveShadow = true;
       this.upperBuildingGroup.add(floorMesh);
 
-      const bandMesh = new THREE.Mesh(corniceGeo, stoneMat);
-      bandMesh.position.y = yBase + 2.86;
-      this.upperBuildingGroup.add(bandMesh);
-
-      facadeSlots.forEach((w) => upperWindows.add(w.x, yBase + 0.85, w.z, w.nx, w.nz, w.w));
+      // el piso 6 es la galería acristalada bajo el alero (RoofBuilder)
+      if (floor <= 5) facadeSlots.forEach((w) => upperWindows.add(w.x, yBase + 0.85, w.z, w.nx, w.nz, w.w));
     }
 
     this.upperBuildingGroup.add(upperWindows.build());
@@ -1051,7 +1051,7 @@ export class HotelBuildingBuilder {
 
     if (this.roofData?.main) {
       // Cubierta real a cuatro aguas con teja de barro, caballetes y alero (esqueleto recto)
-      this.roofBuilder.addRoof(this.roofData.main, this.upperBuildingGroup);
+      this.roofBuilder.addRoof(this.roofData.main, this.upperBuildingGroup, { gallery: true, ivyMat: this.materials.get('REVIT_WIN_IVY') });
     } else {
       // A. Overhanging Dark Timber Eaves with Rafters
       const eavesGeo = new THREE.ExtrudeGeometry(shape, {
@@ -1099,59 +1099,118 @@ export class HotelBuildingBuilder {
     });
   }
 
+  /**
+   * Acceso principal "HOTEL ESTELAR LA FONTANA" (fotos de la fachada):
+   * escalinata ancha de 6 peldaños (huella de baldosa oscura + contrahuella de ladrillo),
+   * muretes laterales con materas de cipreses, marquesina negra con letrero dorado,
+   * luces cálidas en el borde y el plafón, tensores al muro y portal iluminado.
+   * Origen = centro del acceso sobre el plano de fachada, +z hacia el patio.
+   */
   buildEntranceCanopy(cx, cy, cz, rotY = 0) {
-    const canopyGroup = new THREE.Group();
-    canopyGroup.position.set(cx, cy, cz);
-    canopyGroup.rotation.y = rotY;
+    const g = new THREE.Group();
+    g.position.set(cx, cy, cz);
+    g.rotation.y = rotY;
 
-    const metalMat = this.materials.get('ACERO') || new THREE.MeshStandardMaterial({ color: 0x1f2326, roughness: 0.35, metalness: 0.8 });
-    const glassRoofMat = new THREE.MeshPhysicalMaterial({ color: 0xddeef5, transparent: true, opacity: 0.6, roughness: 0.1 });
-    const lampGlowMat = new THREE.MeshStandardMaterial({ color: 0xffe8a4, emissive: 0xffc448, emissiveIntensity: 1.2 });
-    const stepBrickMat = this.materials.get('BRICK_FACADE');
+    const brickMat = this.materials.get('BRICK_FACADE');
+    const treadMat = new THREE.MeshStandardMaterial({ color: 0x5b3426, roughness: 0.7 });
+    const blackMat = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.45, metalness: 0.35 });
+    const warmGlow = new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0xffb84d, emissiveIntensity: 1.6 });
+    const portalMat = new THREE.MeshStandardMaterial({ color: 0xf2c98a, emissive: 0xe8a050, emissiveIntensity: 0.55, roughness: 0.6 });
+    const potMat = new THREE.MeshStandardMaterial({ color: 0x8e3f25, roughness: 0.8 });
+    const cypressMat = new THREE.MeshStandardMaterial({ color: 0x2f4a26, roughness: 0.9 });
 
-    // Stepped entrance stairs
-    for (let s = 0; s < 4; s++) {
-      const stepW = 8.5 - s * 0.4;
-      const stepD = 2.8 - s * 0.4;
-      const step = new THREE.Mesh(new THREE.BoxGeometry(stepW, 0.16, stepD), stepBrickMat);
-      step.position.set(0, s * 0.16 + 0.08, s * 0.2);
-      canopyGroup.add(step);
+    // 1. Escalinata: 6 peldaños, contrahuella 0.17, huella 0.36, ancho 13 m
+    const W = 13.0, RISE = 0.17, RUN = 0.36, N = 6, LANDING = 1.3;
+    const landingY = N * RISE;
+    for (let s = 0; s < N; s++) {
+      const depth = LANDING + (N - s) * RUN;
+      const geo = new THREE.BoxGeometry(W - s * 0.12, RISE, depth);
+      applyArchitecturalBrickUVs(geo, 1.35, 1.35);
+      // grupos BoxGeometry: +x,-x,+y,-y,+z,-z → huella oscura arriba, ladrillo en contrahuella
+      const step = new THREE.Mesh(geo, [brickMat, brickMat, treadMat, treadMat, brickMat, brickMat]);
+      step.position.set(0, s * RISE + RISE / 2, depth / 2);
+      step.castShadow = true;
+      step.receiveShadow = true;
+      g.add(step);
     }
 
-    // Glass & steel canopy cantilever
-    const roofMesh = new THREE.Mesh(new THREE.BoxGeometry(7.2, 0.08, 3.2), glassRoofMat);
-    roofMesh.position.set(0, 3.2, 1.6);
-    const frameBorder = new THREE.Mesh(new THREE.BoxGeometry(7.3, 0.16, 3.3), metalMat);
-    frameBorder.position.set(0, 3.2, 1.6);
-
-    // Cantilever support rods
-    const rod1 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6), metalMat);
-    rod1.position.set(-3.2, 4.0, 1.2);
-    rod1.rotation.x = 0.55;
-    const rod2 = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 2.6), metalMat);
-    rod2.position.set(3.2, 4.0, 1.2);
-    rod2.rotation.x = 0.55;
-
-    // Hanging warm lanterns beneath canopy
-    for (let l = -2.4; l <= 2.4; l += 1.6) {
-      const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.12, 12, 12), lampGlowMat);
-      bulb.position.set(l, 3.0, 1.6);
-      canopyGroup.add(bulb);
-    }
-
-    // Potted topiary shrubs at entrance stairs
-    const potMat = new THREE.MeshStandardMaterial({ color: 0x9b482b, roughness: 0.8 });
-    const shrubMat = this.materials.get('TREE_ROBLE');
-    [-3.8, 3.8].forEach(px => {
-      const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.6, 12), potMat);
-      pot.position.set(px, 0.3, 0.6);
-      const shrub = new THREE.Mesh(new THREE.SphereGeometry(0.48, 12, 12), shrubMat);
-      shrub.position.set(px, 0.85, 0.6);
-      canopyGroup.add(pot, shrub);
+    // 2. Muretes laterales escalonados con materas y cipreses
+    [-1, 1].forEach((side) => {
+      const wallGeo = new THREE.BoxGeometry(0.5, landingY + 0.45, LANDING + N * RUN);
+      applyArchitecturalBrickUVs(wallGeo, 1.35, 1.35);
+      const wall = new THREE.Mesh(wallGeo, brickMat);
+      wall.position.set(side * (W / 2 + 0.25), (landingY + 0.45) / 2, (LANDING + N * RUN) / 2);
+      wall.castShadow = true;
+      g.add(wall);
+      for (let k = 0; k < 3; k++) {
+        const z = 0.6 + k * 1.15, y = landingY + 0.45;
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.24, 0.55, 14), potMat);
+        pot.position.set(side * (W / 2 - 0.6), landingY + 0.27, z);
+        const tree = new THREE.Mesh(new THREE.ConeGeometry(0.42, 2.1 - k * 0.3, 10), cypressMat);
+        tree.position.set(side * (W / 2 - 0.6), landingY + 0.55 + (2.1 - k * 0.3) / 2, z);
+        tree.castShadow = true;
+        const top = new THREE.Mesh(new THREE.SphereGeometry(0.33, 10, 8), cypressMat);
+        top.position.set(side * (W / 2 + 0.25), y + 0.3, z);
+        g.add(pot, tree, top);
+      }
     });
 
-    canopyGroup.add(roofMesh, frameBorder, rod1, rod2);
-    this.lowerBuildingGroup.add(canopyGroup);
+    // 3. Portal iluminado del lobby (vanos cálidos detrás de la marquesina)
+    for (let i = -2; i <= 2; i++) {
+      const v = new THREE.Mesh(new THREE.PlaneGeometry(2.0, 2.8), portalMat);
+      v.position.set(i * 2.45, landingY + 1.4, 0.06);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(2.2, 3.0, 0.08), blackMat);
+      fr.position.set(i * 2.45, landingY + 1.5, 0.02);
+      g.add(fr, v);
+    }
+
+    // 4. Marquesina negra con letrero "HOTEL ESTELAR LA FONTANA"
+    const CW = 13.6, CD = 3.4, CH = 0.55, cy0 = landingY + 3.35;
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(CW, CH, CD), blackMat);
+    canopy.position.set(0, cy0, CD / 2);
+    canopy.castShadow = true;
+    g.add(canopy);
+
+    const c = document.createElement('canvas');
+    c.width = 2048; c.height = 96;
+    const x = c.getContext('2d');
+    x.fillStyle = '#121212'; x.fillRect(0, 0, 2048, 96);
+    x.fillStyle = '#d8b46a';
+    x.font = '600 58px Georgia, "Times New Roman", serif';
+    x.textAlign = 'center'; x.textBaseline = 'middle';
+    if (x.letterSpacing !== undefined) x.letterSpacing = '6px';
+    x.fillText('HOTEL ESTELAR LA FONTANA', 1024, 50);
+    const signTex = new THREE.CanvasTexture(c);
+    signTex.colorSpace = THREE.SRGBColorSpace;
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(CW, CH),
+      new THREE.MeshStandardMaterial({ map: signTex, emissiveMap: signTex, emissive: 0xffffff, emissiveIntensity: 0.35, roughness: 0.5 }));
+    sign.position.set(0, cy0, CD + 0.006);
+    g.add(sign);
+
+    // luces: guirnalda en el borde inferior + plafón
+    const bulbGeo = new THREE.SphereGeometry(0.05, 8, 6);
+    const lights = [];
+    for (let t = -CW / 2 + 0.2; t <= CW / 2 - 0.2; t += 0.45) lights.push([t, cy0 - CH / 2 - 0.05, CD - 0.05]);
+    for (let r = 0; r < 3; r++) for (let t = -CW / 2 + 0.8; t <= CW / 2 - 0.8; t += 1.3) lights.push([t, cy0 - CH / 2 - 0.03, 0.7 + r * 1.0]);
+    const inst = new THREE.InstancedMesh(bulbGeo, warmGlow, lights.length);
+    const m = new THREE.Matrix4();
+    lights.forEach((p, i) => { m.makeTranslation(p[0], p[1], p[2]); inst.setMatrixAt(i, m); });
+    g.add(inst);
+    const pl = new THREE.PointLight(0xffc070, 6, 9, 2);
+    pl.position.set(0, cy0 - 0.8, CD / 2);
+    g.add(pl);
+
+    // tensores al muro
+    [-5.2, 0, 5.2].forEach((tx) => {
+      const a = new THREE.Vector3(tx, cy0 + 0.2, CD - 0.2), b = new THREE.Vector3(tx, cy0 + 2.6, 0.05);
+      const len = a.distanceTo(b);
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 6), blackMat);
+      rod.position.copy(a).add(b).multiplyScalar(0.5);
+      rod.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+      g.add(rod);
+    });
+
+    this.lowerBuildingGroup.add(g);
   }
 
   addGroundRibbonWindows(pts3D, targetGroup) {

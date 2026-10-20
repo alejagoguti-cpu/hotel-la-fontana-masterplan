@@ -137,7 +137,7 @@ export class RoofBuilder {
   }
 
   /** Construye una cubierta del JSON y la agrega al grupo. */
-  addRoof(r, group, { gallery = false } = {}) {
+  addRoof(r, group, { gallery = false, ivyMat = null } = {}) {
     if (!r || !r.slope) return;
 
     // 1. Faldones de teja
@@ -187,7 +187,7 @@ export class RoofBuilder {
     this._addEaves(r, group);
 
     // 5. Galería acristalada bajo el alero (último piso, como en las fotos)
-    if (gallery) this._addGallery(r, group);
+    if (gallery) this._addGallery(r, group, ivyMat);
   }
 
   _addEaves(r, group) {
@@ -208,9 +208,9 @@ export class RoofBuilder {
 
   }
 
-  _addGallery(r, group) {
+  _addGallery(r, group, ivyMat = null) {
     const fp = r.footprint;
-    const top = r.wallTop - 0.42, bot = r.wallTop - 1.85;
+    const top = r.wallTop - 0.42, bot = r.wallTop - 2.45;
     const pos = [], uv = [], idx = [];
     let acc = 0;
     for (let i = 0; i < fp.length; i++) {
@@ -233,6 +233,39 @@ export class RoofBuilder {
     const mesh = new THREE.Mesh(g, this.galleryMat);
     mesh.receiveShadow = true;
     group.add(mesh);
+
+    // Jardinera corrida con hiedra colgante bajo la galería (como en las fotos)
+    if (ivyMat) {
+      const ip = [], iu = [], ii = [], lp = [], li = [];
+      let a2 = 0;
+      for (let i = 0; i < fp.length; i++) {
+        const p = fp[i], q = fp[(i + 1) % fp.length];
+        const dx = q[0] - p[0], dz = q[1] - p[1], len = Math.hypot(dx, dz);
+        if (len < 0.5) continue;
+        const ox = dz / len, oz = -dx / len;
+        const o = ip.length / 3, k = 0.26;
+        ip.push(p[0] + ox * k, bot - 0.75, p[1] + oz * k, q[0] + ox * k, bot - 0.75, q[1] + oz * k,
+                q[0] + ox * k, bot + 0.12, q[1] + oz * k, p[0] + ox * k, bot + 0.12, p[1] + oz * k);
+        iu.push(a2 / 1.1, 0, (a2 + len) / 1.1, 0, (a2 + len) / 1.1, 1, a2 / 1.1, 1);
+        ii.push(o, o + 1, o + 2, o, o + 2, o + 3);
+        // repisa de la jardinera
+        const ol = lp.length / 3, kk = 0.24;
+        lp.push(p[0], bot - 0.05, p[1], q[0], bot - 0.05, q[1], q[0] + ox * kk, bot - 0.05, q[1] + oz * kk, p[0] + ox * kk, bot - 0.05, p[1] + oz * kk);
+        li.push(ol, ol + 1, ol + 2, ol, ol + 2, ol + 3);
+        a2 += len;
+      }
+      const ig = new THREE.BufferGeometry();
+      ig.setAttribute('position', new THREE.Float32BufferAttribute(ip, 3));
+      ig.setAttribute('uv', new THREE.Float32BufferAttribute(iu, 2));
+      ig.setIndex(ii);
+      ig.computeVertexNormals();
+      group.add(new THREE.Mesh(ig, ivyMat));
+      const lg = new THREE.BufferGeometry();
+      lg.setAttribute('position', new THREE.Float32BufferAttribute(lp, 3));
+      lg.setIndex(li);
+      lg.computeVertexNormals();
+      group.add(new THREE.Mesh(lg, new THREE.MeshStandardMaterial({ color: 0x55524c, roughness: 0.9, side: THREE.DoubleSide })));
+    }
   }
 
   /** Terraza plana para volúmenes bajos (podios). */
