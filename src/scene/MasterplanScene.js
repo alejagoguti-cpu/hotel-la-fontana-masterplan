@@ -86,11 +86,12 @@ export class MasterplanScene {
       fetch('./data/geometry/p2-furniture.json').then(r => r.json()),
       fetch('./data/rooms-piso2.json').then(r => r.json()),
       fetch('./data/geometry/catastro-buildings-3d.json').then(r => r.json()).catch(() => []),
-      fetch('./data/geometry/urban-roads-trees-3d.json').then(r => r.json()).catch(() => ({}))
+      fetch('./data/geometry/urban-roads-trees-3d.json').then(r => r.json()).catch(() => ({})),
+      fetch('./data/geometry/p2-windows-revit.json').then(r => r.json()).catch(() => [])
     ]);
 
-    // 1. Hotel building exterior + real Catastro urban context + real roads & trees
-    const building = this.buildingBuilder.build(arch, catastro, urbanNetwork);
+    // 1. Hotel building exterior + real Catastro urban context + real roads & trees + authentic Revit windows
+    const building = this.buildingBuilder.build(arch, catastro, urbanNetwork, revitWindows);
     this.scene.add(building);
 
     // 2. Interior Piso 2

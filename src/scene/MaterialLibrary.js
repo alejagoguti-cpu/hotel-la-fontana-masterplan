@@ -27,16 +27,108 @@ export class MaterialLibrary {
   }
 
   initAll() {
-    // 1. Exterior Brick Facade (Iconic Hotel Estelar La Fontana Bogotá red brick)
+    // 1. Exterior Brick Facade (Iconic Hotel Estelar La Fontana Bogotá red brick - 1:1 Revit material)
     const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 1.0, 1.0, true);
     const brickBump = this.getTexture('./assets/textures/hlf_ladrillo_bump.png', 1.0, 1.0, false);
     this.materials.set('BRICK_FACADE', new THREE.MeshStandardMaterial({
       map: brickMap,
       bumpMap: brickBump,
-      bumpScale: 0.04,
-      color: 0xc44f33, // Warm vibrant Bogotá red brick tint
-      roughness: 0.74,
+      bumpScale: 0.048,
+      color: 0xffffff, // 100% pure Revit texture - no color distortion
+      roughness: 0.78,
       metalness: 0.02
+    }));
+
+    // 1B. Spanish Terracotta Clay Roof Tiles (Teja de barro colonial roja - Photo 1 & 2 reference)
+    const tileCanvas = document.createElement('canvas');
+    tileCanvas.width = 256;
+    tileCanvas.height = 256;
+    const tctx = tileCanvas.getContext('2d');
+    // Terracotta clay base
+    tctx.fillStyle = '#b84d2f';
+    tctx.fillRect(0, 0, 256, 256);
+    // Spanish barrel tile fluting lines
+    for (let y = 0; y < 256; y += 16) {
+      tctx.fillStyle = (y % 32 === 0) ? '#8f381e' : '#ca5d3b';
+      tctx.fillRect(0, y, 256, 3);
+      tctx.fillStyle = 'rgba(0,0,0,0.18)';
+      tctx.fillRect(0, y + 3, 256, 2);
+    }
+    for (let x = 0; x < 256; x += 32) {
+      const grad = tctx.createLinearGradient(x, 0, x + 32, 0);
+      grad.addColorStop(0, 'rgba(0,0,0,0.28)');
+      grad.addColorStop(0.3, 'rgba(255,255,255,0.14)');
+      grad.addColorStop(0.7, 'rgba(255,255,255,0.0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.32)');
+      tctx.fillStyle = grad;
+      tctx.fillRect(x, 0, 32, 256);
+    }
+    const tileTex = new THREE.CanvasTexture(tileCanvas);
+    tileTex.wrapS = THREE.RepeatWrapping;
+    tileTex.wrapT = THREE.RepeatWrapping;
+    tileTex.repeat.set(4, 4);
+
+    this.materials.set('ROOF_CLAY_TILE', new THREE.MeshStandardMaterial({
+      map: tileTex,
+      bumpMap: tileTex,
+      bumpScale: 0.06,
+      color: 0xb54d30,
+      roughness: 0.76,
+      metalness: 0.04
+    }));
+
+    // 1C. Overhanging Dark Timber Eaves & Beams (Alero colonial de madera oscura)
+    this.materials.set('ROOF_EAVES_TIMBER', new THREE.MeshStandardMaterial({
+      color: 0x2e231a,
+      roughness: 0.85,
+      metalness: 0.05
+    }));
+
+    // 1D. Revit Window Family "HLF-VENTANA FACHADA BARANDAL" Materials (Photo 2 Reference)
+    this.materials.set('REVIT_WIN_FRAME', new THREE.MeshStandardMaterial({
+      color: 0x333e3b, // Dark green-slate Revit window frame RGB(58, 72, 68)
+      roughness: 0.45,
+      metalness: 0.25
+    }));
+
+    this.materials.set('REVIT_WIN_GLASS', new THREE.MeshPhysicalMaterial({
+      color: 0x8daab3, // Architectural reflective glass RGB(170, 195, 200)
+      roughness: 0.08,
+      metalness: 0.85,
+      transparent: true,
+      opacity: 0.82,
+      transmission: 0.35,
+      ior: 1.52
+    }));
+
+    this.materials.set('REVIT_WIN_GLASS_LIT', new THREE.MeshStandardMaterial({
+      color: 0xffecb8, // Warm cozy interior room glow visible through curtains
+      roughness: 0.25,
+      emissive: 0xffcd63,
+      emissiveIntensity: 0.38
+    }));
+
+    this.materials.set('REVIT_WIN_RAILING', new THREE.MeshStandardMaterial({
+      color: 0xe8ebe8, // Crisp white / light grey picket baluster bars RGB(214, 214, 208)
+      roughness: 0.32,
+      metalness: 0.15
+    }));
+
+    this.materials.set('REVIT_WIN_PLANTER', new THREE.MeshStandardMaterial({
+      color: 0x585652, // Concrete cantilevered planter sill RGB(96, 94, 90)
+      roughness: 0.88,
+      metalness: 0.05
+    }));
+
+    const ivyTex = this.getTexture('./assets/textures/hlf_hiedra.png', 1.0, 1.0, true);
+    this.materials.set('REVIT_WIN_IVY', new THREE.MeshStandardMaterial({
+      map: ivyTex,
+      transparent: true,
+      alphaTest: 0.22,
+      side: THREE.DoubleSide,
+      color: 0x3d7028, // Lush vibrant green foliage
+      roughness: 0.78,
+      metalness: 0.0
     }));
 
     // 1B. Architectural Context Buildings (Umbra3D Studio signature frosted white look)

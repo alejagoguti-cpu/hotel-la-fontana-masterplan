@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { loopToShape } from './HotelBuildingBuilder.js';
+import { loopToShape, applyArchitecturalBrickUVs } from './HotelBuildingBuilder.js';
 
 const MM_TO_M = 0.001;
 const PISO2_Y = 3.02; // Base elevation of Piso 2 in meters
@@ -193,8 +193,9 @@ export class Piso2InteriorBuilder {
       const thick = Math.max((thickMm || 120) * MM_TO_M, 0.08);
       const wallHeight = 2.42; // Cutaway height so interior rooms are clearly visible from above
       const geo = new THREE.BoxGeometry(len, wallHeight, thick);
-      const isBrick = (thickMm || 0) >= 220;
-      const mat = isBrick ? this.materials.get('WALL_TESSERA') : this.materials.get('WALL_PAINT');
+      const isBrick = (thickMm || 0) >= 150 || (typeName && (typeName.includes('MAMPOSTERIA') || typeName.includes('EXISTENTE') || typeName.includes('LADRILLO')));
+      if (isBrick) applyArchitecturalBrickUVs(geo, 1.35, 1.35);
+      const mat = isBrick ? this.materials.get('BRICK_FACADE') : this.materials.get('WALL_PAINT');
       const mesh = new THREE.Mesh(geo, mat);
 
       mesh.position.set((x1 + x2) / 2, PISO2_Y + wallHeight / 2, (z1 + z2) / 2);
