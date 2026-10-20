@@ -35,12 +35,17 @@ export class MasterplanScene {
     container.appendChild(this.renderer.domElement);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    // Pivoteo tipo masterplan (Umbra): giro suave alrededor del hotel, inclinación acotada,
+    // desplazamiento sobre el plano del suelo y sin perder el proyecto de vista
     this.controls.enableDamping = true;
-    this.controls.dampingFactor = 0.05;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.03; // don't go below ground
-    this.controls.minDistance = 5;
-    this.controls.maxDistance = 1800;
+    this.controls.dampingFactor = 0.08;
+    this.controls.rotateSpeed = 0.55;
+    this.controls.zoomSpeed = 0.9;
+    this.controls.panSpeed = 0.8;
+    this.controls.screenSpacePanning = false; // arrastre sobre el suelo, el pivote nunca sube ni se entierra
     this.controls.target.set(16, 4.2, 2);
+    this.pivotCenter = new THREE.Vector3(20, 0, 0);
+    this.setOrbitLimits('exterior');
 
     this.materials = new MaterialLibrary(this.renderer);
     this.materials.initAll();
@@ -217,7 +222,33 @@ export class MasterplanScene {
     });
   }
 
+  /** Límites de cámara por modo: el exterior se comporta como un masterplan aéreo. */
+  setOrbitLimits(mode) {
+    const c = this.controls;
+    if (mode === 'top') {
+      c.minPolarAngle = 0; c.maxPolarAngle = 0.6; c.minDistance = 20; c.maxDistance = 400; this.panRadius = 120;
+    } else if (mode === 'interior') {
+      c.minPolarAngle = 0; c.maxPolarAngle = Math.PI / 2 - 0.05; c.minDistance = 5; c.maxDistance = 300; this.panRadius = 120;
+    } else {
+      c.minPolarAngle = 0.32;          // no llega a la vertical (evita el giro brusco en el cenit)
+      c.maxPolarAngle = 1.32;          // ni al horizonte (siempre se ve el suelo y el contexto)
+      c.minDistance = 25; c.maxDistance = 1500; this.panRadius = 350;
+    }
+  }
+
+  /** Mantiene el pivote cerca del hotel y a nivel de suelo (mueve cámara y pivote juntos). */
+  _clampPivot() {
+    const t = this.controls.target, c = this.pivotCenter;
+    const d = new THREE.Vector3(t.x - c.x, 0, t.z - c.z);
+    const r = d.length(), R = this.panRadius || 350;
+    const fix = new THREE.Vector3();
+    if (r > R) fix.copy(d).multiplyScalar(R / r - 1);
+    fix.y = THREE.MathUtils.clamp(t.y, 0, 30) - t.y;
+    if (fix.lengthSq() > 1e-8) { t.add(fix); this.camera.position.add(fix); }
+  }
+
   applyViewMode(mode) {
+    this.setOrbitLimits(mode);
     if (mode === 'interior') {
       // Cutaway: hide upper floors and exterior shell of Piso 2
       this.buildingBuilder.upperBuildingGroup.visible = false;
@@ -305,6 +336,7 @@ export class MasterplanScene {
     this.skyEnv?.update(dt);
     this.buildingBuilder?.update?.(dt);
     this.controls.update();
+    this._clampPivot();
     this._updateRange();
     if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
