@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { RoofBuilder } from './RoofBuilder.js';
 
 const MM_TO_M = 0.001;
 
@@ -116,7 +117,9 @@ export class HotelBuildingBuilder {
     this.rootGroup.add(this.upperBuildingGroup);
   }
 
-  build(architectureData, catastroBuildings = [], urbanNetwork = {}, revitWindows = []) {
+  build(architectureData, catastroBuildings = [], urbanNetwork = {}, revitWindows = [], roofData = null) {
+    this.roofData = roofData;
+    this.roofBuilder = new RoofBuilder();
     const mainFootprint = architectureData.slabLoops?.[0]?.loops?.[0] || [
       [24840, 3760], [31226, -2626], [28800, -5052], [28800, -11000],
       [32800, -15250], [38900, -15250], [49125, -5025], [29450, 14650],
@@ -285,6 +288,13 @@ export class HotelBuildingBuilder {
     ground.receiveShadow = true;
     this.contextGroup.add(ground);
 
+    // 1b. Cubiertas de teja a cuatro aguas del conjunto La Fontana (precalculadas)
+    if (this.roofData?.context) {
+      this.roofData.context.forEach((r) => {
+        if (r.slope) this.roofBuilder.addRoof(r, this.contextGroup, { gallery: true });
+      });
+    }
+
     // 2. Real Bogotá Catastro Buildings
     if (Array.isArray(catastroBuildings) && catastroBuildings.length > 0) {
       for (let i = 0; i < catastroBuildings.length; i++) {
@@ -315,33 +325,38 @@ export class HotelBuildingBuilder {
             hotelMesh.receiveShadow = true;
             this.contextGroup.add(hotelMesh);
 
-            // Spanish Terracotta Clay Roof Tiles (Teja de barro roja - Photo 1 & 2)
-            const roofGeo = new THREE.ExtrudeGeometry(shape, {
-              depth: 1.5,
-              bevelEnabled: true,
-              bevelSize: -0.35,
-              bevelThickness: 0.75,
-              bevelSegments: 2
-            });
-            roofGeo.rotateX(-Math.PI / 2);
-            applyArchitecturalBrickUVs(roofGeo, 1.35, 1.35);
-            const roofMesh = new THREE.Mesh(roofGeo, [roofClayMat, roofClayMat]);
-            roofMesh.position.y = height;
-            roofMesh.castShadow = true;
-            this.contextGroup.add(roofMesh);
+            if (this.roofData) {
+              // Cubierta real a cuatro aguas (esqueleto recto) o terraza en podios bajos
+              if (height < 6.5) this.roofBuilder.addTerrace(shape, height, this.contextGroup);
+            } else {
+              // Spanish Terracotta Clay Roof Tiles (Teja de barro roja - Photo 1 & 2)
+              const roofGeo = new THREE.ExtrudeGeometry(shape, {
+                depth: 1.5,
+                bevelEnabled: true,
+                bevelSize: -0.35,
+                bevelThickness: 0.75,
+                bevelSegments: 2
+              });
+              roofGeo.rotateX(-Math.PI / 2);
+              applyArchitecturalBrickUVs(roofGeo, 1.35, 1.35);
+              const roofMesh = new THREE.Mesh(roofGeo, [roofClayMat, roofClayMat]);
+              roofMesh.position.y = height;
+              roofMesh.castShadow = true;
+              this.contextGroup.add(roofMesh);
 
-            // Overhanging Dark Timber Eaves Trim
-            const eavesGeo = new THREE.ExtrudeGeometry(shape, {
-              depth: 0.18,
-              bevelEnabled: true,
-              bevelSize: 0.22,
-              bevelThickness: 0.08,
-              bevelSegments: 1
-            });
-            eavesGeo.rotateX(-Math.PI / 2);
-            const eaves = new THREE.Mesh(eavesGeo, timberEavesMat);
-            eaves.position.y = height - 0.08;
-            this.contextGroup.add(eaves);
+              // Overhanging Dark Timber Eaves Trim
+              const eavesGeo = new THREE.ExtrudeGeometry(shape, {
+                depth: 0.18,
+                bevelEnabled: true,
+                bevelSize: 0.22,
+                bevelThickness: 0.08,
+                bevelSegments: 1
+              });
+              eavesGeo.rotateX(-Math.PI / 2);
+              const eaves = new THREE.Mesh(eavesGeo, timberEavesMat);
+              eaves.position.y = height - 0.08;
+              this.contextGroup.add(eaves);
+            }
 
             // Add authentic windows on every floor of this hotel wing
             this.addWindowsAlongPolygon(b.pts, 0, height, this.contextGroup);
@@ -1029,46 +1044,52 @@ export class HotelBuildingBuilder {
     // ==============================================================
     const roofBaseY = 18.0;
 
-    // A. Overhanging Dark Timber Eaves with Rafters
-    const eavesGeo = new THREE.ExtrudeGeometry(shape, {
-      depth: 0.28,
-      bevelEnabled: true,
-      bevelSize: 0.45,
-      bevelThickness: 0.14,
-      bevelSegments: 1
-    });
-    eavesGeo.rotateX(-Math.PI / 2);
-    const eavesMesh = new THREE.Mesh(eavesGeo, timberEavesMat);
-    eavesMesh.position.y = roofBaseY;
-    eavesMesh.castShadow = true;
-    this.upperBuildingGroup.add(eavesMesh);
+    if (this.roofData?.main) {
+      // Cubierta real a cuatro aguas con teja de barro, caballetes y alero (esqueleto recto)
+      this.roofBuilder.addRoof(this.roofData.main, this.upperBuildingGroup);
+    } else {
+      // A. Overhanging Dark Timber Eaves with Rafters
+      const eavesGeo = new THREE.ExtrudeGeometry(shape, {
+        depth: 0.28,
+        bevelEnabled: true,
+        bevelSize: 0.45,
+        bevelThickness: 0.14,
+        bevelSegments: 1
+      });
+      eavesGeo.rotateX(-Math.PI / 2);
+      const eavesMesh = new THREE.Mesh(eavesGeo, timberEavesMat);
+      eavesMesh.position.y = roofBaseY;
+      eavesMesh.castShadow = true;
+      this.upperBuildingGroup.add(eavesMesh);
 
-    // B. Spanish Terracotta Clay Tile Hip Roof (Teja de barro roja)
-    const roofTileGeo = new THREE.ExtrudeGeometry(shape, {
-      depth: 2.2,
-      bevelEnabled: true,
-      bevelSize: -0.65,
-      bevelThickness: 1.2,
-      bevelSegments: 2
-    });
-    roofTileGeo.rotateX(-Math.PI / 2);
-    applyArchitecturalBrickUVs(roofTileGeo, 1.35, 1.35);
-    const roofMesh = new THREE.Mesh(roofTileGeo, [roofClayMat, roofClayMat]);
-    roofMesh.position.y = roofBaseY + 0.22;
-    roofMesh.castShadow = true;
-    roofMesh.receiveShadow = true;
-    this.upperBuildingGroup.add(roofMesh);
+      // B. Spanish Terracotta Clay Tile Hip Roof (Teja de barro roja)
+      const roofTileGeo = new THREE.ExtrudeGeometry(shape, {
+        depth: 2.2,
+        bevelEnabled: true,
+        bevelSize: -0.65,
+        bevelThickness: 1.2,
+        bevelSegments: 2
+      });
+      roofTileGeo.rotateX(-Math.PI / 2);
+      applyArchitecturalBrickUVs(roofTileGeo, 1.35, 1.35);
+      const roofMesh = new THREE.Mesh(roofTileGeo, [roofClayMat, roofClayMat]);
+      roofMesh.position.y = roofBaseY + 0.22;
+      roofMesh.castShadow = true;
+      roofMesh.receiveShadow = true;
+      this.upperBuildingGroup.add(roofMesh);
+    }
 
     // C. Traditional Brick Chimneys (Photo 1 Reference)
     const chimneyPositions = [
       [34.0, 10.0], [28.0, 0.0], [12.0, 10.0], [-4.0, 8.0], [42.0, -8.0]
     ];
     chimneyPositions.forEach(([cx, cz]) => {
-      const chim = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 1.4), brickMat);
+      const chim = new THREE.Mesh(new THREE.BoxGeometry(1.4, 4.6, 1.4), brickMat);
       applyArchitecturalBrickUVs(chim.geometry, 1.35, 1.35);
-      chim.position.set(cx, roofBaseY + 2.4, cz);
+      chim.position.set(cx, roofBaseY + 2.3, cz);
+      chim.castShadow = true;
       const chimCap = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.2, 1.7), stoneMat);
-      chimCap.position.set(cx, roofBaseY + 3.55, cz);
+      chimCap.position.set(cx, roofBaseY + 4.7, cz);
       this.upperBuildingGroup.add(chim, chimCap);
     });
   }
