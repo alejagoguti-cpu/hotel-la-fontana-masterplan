@@ -11,6 +11,7 @@ class App {
   constructor() {
     this.container = document.getElementById('canvas-container');
     this.scene = new MasterplanScene(this.container);
+    window.__masterplan = this.scene;
 
     this.galleryModal = new GalleryModal();
     this.locationModal = new LocationModal();
@@ -47,6 +48,23 @@ class App {
         store.setState({ viewMode: mode });
       };
     });
+
+    // Sky Atmosphere: hora del día
+    const hourInput = document.getElementById('sky-hour');
+    const hourLabel = document.getElementById('sky-hour-label');
+    if (hourInput) {
+      let pending = null;
+      hourInput.addEventListener('input', () => {
+        const h = parseFloat(hourInput.value);
+        const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+        hourLabel.textContent = `${String(hh).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`;
+        if (pending) return;
+        pending = requestAnimationFrame(() => {
+          pending = null;
+          this.scene.skyEnv?.setHour(parseFloat(hourInput.value));
+        });
+      });
+    }
 
     // BIM AI Agent button
     const bimBtn = document.getElementById('btn-toggle-bim-agent');
