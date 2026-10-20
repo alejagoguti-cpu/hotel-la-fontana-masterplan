@@ -275,7 +275,7 @@ export class HotelBuildingBuilder {
     const groundW = ORTHO_X_MAX - ORTHO_X_MIN;
     const groundH = ORTHO_Z_MAX - ORTHO_Z_MIN;
     const groundMat = new THREE.MeshStandardMaterial({
-      map: this.materials.getTexture('./assets/textures/satellite_ortho_la_fontana.jpg', 1, 1, true),
+      color: 0xebf0f5,
       roughness: 0.9,
       metalness: 0.02
     });
@@ -347,8 +347,7 @@ export class HotelBuildingBuilder {
             this.addWindowsAlongPolygon(b.pts, 0, height, this.contextGroup);
           } else {
             // Surrounding non-hotel urban context: frosted architectural white volumes
-            applySatelliteRoofUVs(geo, ORTHO_X_MIN, ORTHO_X_MAX, ORTHO_Z_MIN, ORTHO_Z_MAX);
-            const mesh = new THREE.Mesh(geo, contextWhiteMat);
+                        const mesh = new THREE.Mesh(geo, contextWhiteMat);
             mesh.castShadow = true;
             mesh.receiveShadow = true;
             this.contextGroup.add(mesh);
