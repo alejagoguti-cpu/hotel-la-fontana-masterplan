@@ -5,8 +5,21 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { RoofBuilder } from './RoofBuilder.js';
 import { FacadeWindows } from './FacadeWindows.js';
 import { SiteDetails } from './SiteDetails.js';
+import { applyPBR, SURFACES } from './PBRSurfaces.js';
 
 const MM_TO_M = 0.001;
+
+/**
+ * Ejes de calzada (x, z) medidos sobre los polígonos de Catastro. El eje es la línea
+ * que divide los dos carriles de cada calzada; el tráfico circula a ±1.7 m de él.
+ * El orden de los puntos = sentido de circulación.
+ */
+export const ROAD_AXES = {
+  eb: [[-150, 16.25], [-120, 21.25], [-80, 26.0], [-40, 30.75], [0, 34.75], [40, 39.0], [60, 41.0], [120, 48.75], [160, 52.25]],
+  wb: [[160, 80.5], [120, 77.0], [60, 68.75], [40, 66.75], [0, 63.5], [-40, 60.25], [-80, 55.75], [-120, 51.25], [-150, 46.25]],
+  sb: [[88.5, -100], [87.5, -80], [85.5, -40], [83.5, 0], [81.5, 30], [80.5, 44]],
+  nb: [[100, 30], [101.75, 0], [103.75, -40], [106, -80], [107, -100]]
+};
 
 /**
  * Converts a 2D Revit polygon loop ([[x_mm, y_mm], ...]) into a THREE.Shape
@@ -297,6 +310,11 @@ export class HotelBuildingBuilder {
       roughness: 0.9,
       metalness: 0.02
     });
+    // Concreto real desgastado (fotogrametría CC0) con variación macro anti-repetición
+    applyPBR(groundMat, SURFACES.CONCRETE_WORN, {
+      uvRepeat: new THREE.Vector2(groundW / 4.0, groundH / 4.0), tint: 0xd8d4cc, normalScale: 0.8,
+      macro: { macroScale: 0.05, strength: 0.32 }
+    });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundW, groundH), groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.position.set((ORTHO_X_MIN + ORTHO_X_MAX) / 2, -0.06, (ORTHO_Z_MIN + ORTHO_Z_MAX) / 2);
@@ -397,6 +415,8 @@ export class HotelBuildingBuilder {
 
     // 3. Official Bogotá Road Network (Calzadas, Andenes, Separadores, Ciclorrutas)
     const calzadaMat = this.materials.get('ROAD_ASPHALT');
+    // Asfalto real con fisuras, parcheo y desgaste (UV de ExtrudeGeometry en metros)
+    applyPBR(calzadaMat, SURFACES.ASPHALT, { metersPerTile: 5.0, tint: 0xb8b8b8, normalScale: 1.0, macro: { macroScale: 0.06, strength: 0.38 } });
     const andenMat = this.materials.get('SIDEWALK_PAVING');
     const alamedaMat = this.materials.get('TURF_GRASS');
     const cicloMat = this.materials.get('BIKEWAY_BLUE');
@@ -512,54 +532,83 @@ export class HotelBuildingBuilder {
     });
   }
 
+  /**
+   * Demarcación vial: línea discontinua blanca de división de carriles exactamente
+   * sobre el eje de cada calzada (el mismo que usa el tráfico) y cebras centradas
+   * en la calzada, perpendiculares al sentido de circulación.
+   */
   buildRoadMarkings() {
     const markGroup = new THREE.Group();
     const whiteMat = new THREE.MeshBasicMaterial({ color: 0xf5f7fa });
-    const yellowMat = new THREE.MeshBasicMaterial({ color: 0xf6c83b });
+    const ROAD_W = 7.0;
 
-    const addZebra = (cx, cz, isHoriz, length = 12, width = 4.2) => {
-      const stripes = 8;
-      const stripeW = 0.45;
-      const spacing = isHoriz ? width / stripes : length / stripes;
-      for (let s = 0; s < stripes; s++) {
-        const sw = isHoriz ? length : stripeW;
-        const sh = isHoriz ? stripeW : width;
-        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), whiteMat);
-        mesh.rotation.x = -Math.PI / 2;
-        const ox = isHoriz ? cx : cx - length / 2 + s * spacing + spacing / 2;
-        const oz = isHoriz ? cz - width / 2 + s * spacing + spacing / 2 : cz;
-        mesh.position.set(ox, 0.052, oz);
+    // punto y dirección sobre un eje a partir de una coordenada (x para E-O, z para N-S)
+    const pointOnAxis = (pts, key, value) => {
+      const k = key === 'x' ? 0 : 1;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const lo = Math.min(a[k], b[k]), hi = Math.max(a[k], b[k]);
+        if (value >= lo && value <= hi) {
+          const t = (value - a[k]) / ((b[k] - a[k]) || 1);
+          const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz);
+          return { x: a[0] + dx * t, z: a[1] + dz * t, ux: dx / l, uz: dz / l };
+        }
+      }
+      return null;
+    };
+
+    const addZebra = (axisKey, key, value) => {
+      const p = pointOnAxis(ROAD_AXES[axisKey], key, value);
+      if (!p) return;
+      const stripes = 7, stripeW = 0.5, stripeL = 3.6;
+      const ang = Math.atan2(p.ux, p.uz);
+      for (let i = 0; i < stripes; i++) {
+        const off = -ROAD_W / 2 + (ROAD_W / stripes) * (i + 0.5);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(stripeW, stripeL), whiteMat);
+        mesh.rotation.order = 'YXZ';
+        mesh.rotation.set(-Math.PI / 2, ang, 0);
+        mesh.position.set(p.x + p.uz * off, 0.053, p.z - p.ux * off);
         markGroup.add(mesh);
       }
     };
 
-    addZebra(-12, 42.0, true, 10.5, 4.0);
-    addZebra(62, 44.5, true, 11.0, 4.0);
-    addZebra(76, -18.0, false, 4.0, 11.5);
-    addZebra(76, 12.0, false, 4.0, 11.5);
-
-    const addDashedLine = (x1, z1, x2, z2, mat = whiteMat, dashLen = 3.2, gapLen = 4.5) => {
-      const dx = x2 - x1, dz = z2 - z1;
-      const totalLen = Math.hypot(dx, dz);
-      const angle = Math.atan2(dz, dx);
-      let dist = 0;
-      while (dist + dashLen <= totalLen) {
-        const mx = x1 + Math.cos(angle) * (dist + dashLen / 2);
-        const mz = z1 + Math.sin(angle) * (dist + dashLen / 2);
-        const stripe = new THREE.Mesh(new THREE.PlaneGeometry(dashLen, 0.16), mat);
-        stripe.rotation.x = -Math.PI / 2;
-        stripe.rotation.z = -angle;
-        stripe.position.set(mx, 0.051, mz);
-        markGroup.add(stripe);
-        dist += dashLen + gapLen;
+    // línea discontinua continua a lo largo de una polilínea (3 m trazo / 4.5 m espacio)
+    const addDashedPolyline = (pts, skip = () => false, dash = 3.0, gap = 4.5) => {
+      let carry = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        const dx = b[0] - a[0], dz = b[1] - a[1], len = Math.hypot(dx, dz);
+        const ux = dx / len, uz = dz / len, ang = Math.atan2(ux, uz);
+        let d = carry;
+        while (d < len) {
+          const s0 = Math.max(d, 0), s1 = Math.min(d + dash, len);
+          if (s1 > s0 + 0.05) {
+            const mid = (s0 + s1) / 2, x = a[0] + ux * mid, z = a[1] + uz * mid;
+            if (!skip(x, z)) {
+              const m = new THREE.Mesh(new THREE.PlaneGeometry(0.15, s1 - s0), whiteMat);
+              m.rotation.order = 'YXZ';
+              m.rotation.set(-Math.PI / 2, ang, 0);
+              m.position.set(x, 0.052, z);
+              markGroup.add(m);
+            }
+          }
+          d += dash + gap;
+        }
+        carry = d - len;
       }
     };
 
-    addDashedLine(-85, 33.5, 120, 39.5, whiteMat);
-    addDashedLine(-85, 40.5, 120, 47.5, yellowMat);
-    addDashedLine(-85, 62.0, 120, 68.0, whiteMat);
-    addDashedLine(-85, 69.5, 120, 75.5, whiteMat);
-    addDashedLine(82.0, -95, 82.0, 45, whiteMat);
+    // sin demarcación dentro de la intersección Calle 127 × Carrera 15
+    const inIntersection = (x, z) => x > 72 && x < 112 && z > 36 && z < 86;
+    Object.values(ROAD_AXES).forEach((pts) => addDashedPolyline(pts, inIntersection));
+
+    // cebras en los accesos a la intersección y frente al hotel
+    addZebra('eb', 'x', -12);
+    addZebra('wb', 'x', -12);
+    addZebra('eb', 'x', 66);
+    addZebra('wb', 'x', 66);
+    addZebra('sb', 'z', 28);
+    addZebra('nb', 'z', 26);
 
     this.contextGroup.add(markGroup);
   }
@@ -843,12 +892,7 @@ export class HotelBuildingBuilder {
     this.trafficCars = [];
 
     // Ejes de calzada (x, z) — sentido de circulación = orden de los puntos
-    const AXES = {
-      eb: [[-150, 16.25], [-120, 21.25], [-80, 26.0], [-40, 30.75], [0, 34.75], [40, 39.0], [60, 41.0], [120, 48.75], [160, 52.25]],
-      wb: [[160, 80.5], [120, 77.0], [60, 68.75], [40, 66.75], [0, 63.5], [-40, 60.25], [-80, 55.75], [-120, 51.25], [-150, 46.25]],
-      sb: [[88.5, -100], [87.5, -80], [85.5, -40], [83.5, 0], [81.5, 30], [80.5, 44]],
-      nb: [[100, 30], [101.75, 0], [103.75, -40], [106, -80], [107, -100]]
-    };
+    const AXES = ROAD_AXES;
     const offsetPath = (pts, off) => pts.map((p, i) => {
       const a = pts[Math.max(0, i - 1)], b = pts[Math.min(pts.length - 1, i + 1)];
       const dx = b[0] - a[0], dz = b[1] - a[1], l = Math.hypot(dx, dz) || 1;
