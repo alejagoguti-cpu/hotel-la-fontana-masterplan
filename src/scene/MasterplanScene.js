@@ -5,19 +5,21 @@ import { HotelBuildingBuilder } from './HotelBuildingBuilder.js';
 import { Piso2InteriorBuilder } from './Piso2InteriorBuilder.js';
 import { RoomHighlighter } from './RoomHighlighter.js';
 import { store } from '../state/store.js';
+import { SkyEnvironment } from './SkyEnvironment.js';
 
 export class MasterplanScene {
   constructor(container) {
     this.container = container;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xdce5ee);
-    this.scene.fog = new THREE.Fog(0xdce5ee, 180, 520);
+    // Cielo procedural tipo Unreal (Sky Atmosphere + Volumetric Clouds): ver SkyEnvironment
+    this.scene.fog = new THREE.Fog(0xc9d6e4, 220, 1400);
+    this.clock = new THREE.Clock();
 
     this.camera = new THREE.PerspectiveCamera(
       45,
       container.clientWidth / container.clientHeight,
       0.5,
-      1000
+      3000
     );
     this.camera.position.set(34, 20, 30);
 
@@ -49,13 +51,15 @@ export class MasterplanScene {
     this.mouse = new THREE.Vector2();
 
     this.setupLighting();
+    this.skyEnv = new SkyEnvironment(this.renderer, this.scene, this.sunLight, this.hemiLight);
     this.setupEvents();
     this.animate();
   }
 
   setupLighting() {
     // Ambient / Skylight dome illumination
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc8d6e5, 1.25);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc8d6e5, 0.55);
+    this.hemiLight = hemiLight;
     this.scene.add(hemiLight);
 
     // Main Sunlight (Bright Bogotá daylight with crisp shadows)
@@ -71,10 +75,11 @@ export class MasterplanScene {
     sunLight.shadow.camera.top = 65;
     sunLight.shadow.camera.bottom = -65;
     sunLight.shadow.bias = -0.0003;
+    this.sunLight = sunLight;
     this.scene.add(sunLight);
 
     // Warm bounce fill light
-    const fillLight = new THREE.DirectionalLight(0xe8f0fa, 0.75);
+    const fillLight = new THREE.DirectionalLight(0xe8f0fa, 0.35);
     fillLight.position.set(-50, 40, -40);
     this.scene.add(fillLight);
   }
@@ -239,6 +244,8 @@ export class MasterplanScene {
 
   animate() {
     requestAnimationFrame(() => this.animate());
+    const dt = Math.min(this.clock.getDelta(), 0.1);
+    this.skyEnv?.update(dt);
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
