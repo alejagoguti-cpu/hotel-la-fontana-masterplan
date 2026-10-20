@@ -74,6 +74,7 @@ export function applyPBR(mat, id, { metersPerTile = 4, uvRepeat = null, tint = 0
 }
 
 export const SURFACES = {
+  GRASS: 'leafy_grass',                 // césped real con variación
   ASPHALT: 'asphalt_02',                 // asfalto con fisuras, parches y desgaste
   CONCRETE_WORN: 'concrete_floor_worn_001', // concreto desgastado con manchas
   CONCRETE_PAVEMENT: 'concrete_pavement'    // placas de concreto con juntas

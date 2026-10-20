@@ -6,6 +6,7 @@ import { Piso2InteriorBuilder } from './Piso2InteriorBuilder.js';
 import { RoomHighlighter } from './RoomHighlighter.js';
 import { store } from '../state/store.js';
 import { SkyEnvironment } from './SkyEnvironment.js';
+import { PostFX } from './PostFX.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -52,6 +53,7 @@ export class MasterplanScene {
 
     this.setupLighting();
     this.skyEnv = new SkyEnvironment(this.renderer, this.scene, this.sunLight, this.hemiLight);
+    try { this.postfx = new PostFX(this.renderer, this.scene, this.camera, this.container); } catch (e) { console.warn('PostFX desactivado', e); }
     this.setupEvents();
     this.animate();
   }
@@ -66,8 +68,10 @@ export class MasterplanScene {
     const sunLight = new THREE.DirectionalLight(0xfffaed, 2.8);
     sunLight.position.set(65, 85, 45);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.width = 2048;
-    sunLight.shadow.mapSize.height = 2048;
+    sunLight.shadow.mapSize.width = 4096;
+    sunLight.shadow.mapSize.height = 4096;
+    sunLight.shadow.normalBias = 0.03;
+    sunLight.shadow.radius = 3;
     sunLight.shadow.camera.near = 10;
     sunLight.shadow.camera.far = 240;
     sunLight.shadow.camera.left = -65;
@@ -116,6 +120,7 @@ export class MasterplanScene {
       this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+      this.postfx?.setSize(this.container.clientWidth, this.container.clientHeight);
     });
 
     const onPointerMove = (e) => {
@@ -249,6 +254,6 @@ export class MasterplanScene {
     this.skyEnv?.update(dt);
     this.buildingBuilder?.update?.(dt);
     this.controls.update();
-    this.renderer.render(this.scene, this.camera);
+    if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }
