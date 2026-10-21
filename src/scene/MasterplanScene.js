@@ -11,6 +11,7 @@ import { CityContext } from './CityContext.js';
 import { FloorTour } from './FloorTour.js';
 import { NetworksLayer } from './NetworksLayer.js';
 import { batchStatic, snapshotMatrices, movingSince } from './StaticBatcher.js';
+import { applyWind, windUniforms } from './Wind.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -413,6 +414,13 @@ export class MasterplanScene {
     this._updateRange();
     this.tour?.update(dt);
     this._adaptResolution(dt);
+    // viento en el arbolado (urbano + ortofoto)
+    windUniforms.uWindTime.value += dt;
+    if (!this._windOn && this.materials) {
+      ['TREE_ROBLE', 'TREE_CHICALA', 'TREE_SAUCO', 'TREE_FLOWER_YELLOW', 'TREE_ACACIA'].forEach((k) => applyWind(this.materials.materials.get(k)));
+      this._windOn = true;
+    }
+    if (this.city?.trees && !this._cityWind) { applyWind(this.city.trees.material, { amp: 1.2, from: 2.0, to: 10 }); this._cityWind = true; }
     if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }
