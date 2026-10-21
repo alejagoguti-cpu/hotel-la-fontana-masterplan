@@ -323,9 +323,9 @@ export class HotelBuildingBuilder {
       metalness: 0.02
     });
     // Concreto real desgastado (fotogrametría CC0) con variación macro anti-repetición
-    applyPBR(groundMat, SURFACES.CONCRETE_WORN, {
-      uvRepeat: new THREE.Vector2(groundW / 4.0, groundH / 4.0), tint: 0xd8d4cc, normalScale: 0.8,
-      macro: { macroScale: 0.05, strength: 0.32 }
+    applyPBR(groundMat, SURFACES.CONCRETE_PAVEMENT, {
+      uvRepeat: new THREE.Vector2(groundW / 4.0, groundH / 4.0), tint: 0xd8d4cc, normalScale: 1.05,
+      macro: { macroScale: 0.05, strength: 0.14 }
     });
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(groundW, groundH), groundMat);
     ground.rotation.x = -Math.PI / 2;
@@ -451,7 +451,7 @@ export class HotelBuildingBuilder {
     applyPBR(calzadaMat, SURFACES.ASPHALT, { metersPerTile: 5.0, tint: 0xb8b8b8, normalScale: 1.0, macro: { macroScale: 0.06, strength: 0.38 } });
     const andenMat = this.materials.get('SIDEWALK_PAVING');
     const alamedaMat = this.materials.get('TURF_GRASS');
-    applyPBR(alamedaMat, SURFACES.GRASS, { metersPerTile: 3.0, tint: 0xc8d4b8, normalScale: 0.8, macro: { macroScale: 0.05, strength: 0.4 } });
+    applyPBR(alamedaMat, SURFACES.GRASS, { metersPerTile: 3.0, tint: 0xc8d4b8, normalScale: 1.05, macro: { macroScale: 0.05, strength: 0.4 } });
     const cicloMat = this.materials.get('BIKEWAY_BLUE');
 
     for (const poly of (urbanNetwork.calzadas || [])) {
