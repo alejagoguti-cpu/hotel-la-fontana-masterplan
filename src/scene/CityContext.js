@@ -335,55 +335,5 @@ export class CityContext {
   }
 
   /** Árboles a partir de la ortofoto: píxeles verdes, oscuros y con textura (copas, no césped). */
-  _buildTrees(L) {
-    if (!L.ctx) return;
-    const W = L.canvas.width, H = L.canvas.height;
-    const px = L.ctx.getImageData(0, 0, W, H).data;
-    const mpp = (L.x1 - L.x0) / W;
-    const step = 6.5, max = this.mobile ? 2500 : 9000;
-    const lum = (i) => 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
-    const pts = [];
-    for (let z = L.zN + 4; z < L.zS - 4; z += step) {
-      for (let x = L.x0 + 4; x < L.x1 - 4; x += step) {
-        const jx = x + (Math.random() - 0.5) * step * 0.8, jz = z + (Math.random() - 0.5) * step * 0.8;
-        if (Math.hypot(jx - 10, jz - 5) < 245) continue; // el entorno inmediato ya tiene el arbolado modelado
-        const u = Math.floor((jx - L.x0) / mpp), v = Math.floor((jz - L.zN) / mpp);
-        if (u < 3 || v < 3 || u >= W - 3 || v >= H - 3) continue;
-        const i = (v * W + u) * 4;
-        const r = px[i], g = px[i + 1], b = px[i + 2];
-        if (!(g > r * 1.04 && g > b * 1.08 && g < 150)) continue;
-        // varianza local (las copas tienen textura; el césped es liso)
-        let s = 0, s2 = 0, n = 0;
-        for (let dv = -3; dv <= 3; dv += 2) for (let du = -3; du <= 3; du += 2) { const l = lum(((v + dv) * W + u + du) * 4); s += l; s2 += l * l; n++; }
-        const sd = Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2));
-        if (sd < 9) continue;
-        pts.push([jx, jz, r, g, b]);
-        if (pts.length >= max) break;
-      }
-      if (pts.length >= max) break;
-    }
-    if (!pts.length) return;
-    const crownGeo = new THREE.IcosahedronGeometry(1, 1);
-    const trunkGeo = new THREE.CylinderGeometry(0.12, 0.18, 1, 5); trunkGeo.translate(0, 0.5, 0);
-    const crownMat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0, flatShading: true });
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x4a3b2c, roughness: 1 });
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, pts.length);
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, pts.length);
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), p = new THREE.Vector3(), c = new THREE.Color();
-    pts.forEach(([x, z, r, g, b], k) => {
-      const y = this.heightAt(x, z);
-      const R = 2.2 + Math.random() * 2.4, Ht = 3 + Math.random() * 5;
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6.28);
-      m.compose(p.set(x, y + Ht + R * 0.5, z), q, sc.set(R, R * (0.8 + Math.random() * 0.35), R));
-      crowns.setMatrixAt(k, m);
-      c.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace).multiplyScalar(1.15);
-      crowns.setColorAt(k, c);
-      m.compose(p.set(x, y, z), q, sc.set(1, Ht + 0.5, 1));
-      trunks.setMatrixAt(k, m);
-    });
-    crowns.castShadow = trunks.castShadow = true;
-    crowns.receiveShadow = true;
-    this.group.add(crowns, trunks);
-    this.trees = crowns;
-  }
+
 }
