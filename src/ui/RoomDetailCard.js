@@ -21,7 +21,10 @@ export class RoomDetailCard {
         const room = store.getSelectedRoom();
         if (room) this.onOpenGallery(room);
       } else if (e.target.closest('#btn-view-interior-3d')) {
-        store.setState({ viewMode: 'interior' });
+        const room = store.getSelectedRoom();
+        const tour = window.__masterplan?.tour;
+        if (room && tour) tour.enterRoom(room.id);
+        else store.setState({ viewMode: 'interior' });
       }
     });
   }
@@ -64,7 +67,7 @@ export class RoomDetailCard {
             <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
             <line x1="12" y1="22.08" x2="12" y2="12"/>
           </svg>
-          Ver Interior 3D Real (Corte Piso 2)
+          Recorrer habitación en 3D
         </button>
       </div>
     `;
