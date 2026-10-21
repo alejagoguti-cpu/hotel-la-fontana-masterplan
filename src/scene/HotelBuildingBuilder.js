@@ -922,6 +922,7 @@ export class HotelBuildingBuilder {
    */
   buildRealisticVehicles(calzadaPolys = []) {
     const carGroup = new THREE.Group();
+    carGroup.userData.dynamic = true; // carros y semáforos se mueven/cambian: no se fusionan
     const carShadowMat = this.materials.get('CAR_SHADOW');
     this.trafficCars = [];
 

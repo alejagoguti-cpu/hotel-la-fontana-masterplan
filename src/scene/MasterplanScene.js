@@ -10,6 +10,7 @@ import { PostFX } from './PostFX.js';
 import { CityContext } from './CityContext.js';
 import { FloorTour } from './FloorTour.js';
 import { NetworksLayer } from './NetworksLayer.js';
+import { batchStatic, snapshotMatrices, movingSince } from './StaticBatcher.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -69,18 +70,24 @@ export class MasterplanScene {
       if (this.skyEnv.farGround) this.skyEnv.farGround.visible = false;
     } catch (e) { console.warn('Contexto urbano no disponible', e); }
     try { this.postfx = new PostFX(this.renderer, this.scene, this.camera, this.container); } catch (e) { console.warn('PostFX desactivado', e); }
+    // resolución adaptable: arranca en el máximo del perfil y se ajusta según los FPS reales
+    this.maxPixelRatio = this.postfx?.maxPixelRatio ?? Math.min(window.devicePixelRatio, 2);
+    this.pixelRatio = this.maxPixelRatio;
+    this.renderer.setPixelRatio(this.pixelRatio);
+    this._perf = { t: 0, n: 0, ms: 0 };
+    if (this.postfx?.low && this.skyEnv?.cloudMaterial) this.skyEnv.cloudMaterial.uniforms.uSteps.value = 16;
     this.setupEvents();
     this.animate();
   }
 
   setupLighting() {
     // Ambient / Skylight dome illumination
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc8d6e5, 0.55);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0xc8d6e5, 0.95);
     this.hemiLight = hemiLight;
     this.scene.add(hemiLight);
 
     // Main Sunlight (Bright Bogotá daylight with crisp shadows)
-    const sunLight = new THREE.DirectionalLight(0xfffaed, 2.8);
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 3.1);
     sunLight.position.set(65, 85, 45);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 4096;
@@ -132,6 +139,21 @@ export class MasterplanScene {
 
     store.setState({ rooms });
     this.applyViewMode(store.state.viewMode);
+    this.batchSoon();
+  }
+
+  /** Fusiona las mallas quietas (ver StaticBatcher): de ~14.000 llamadas de dibujo a unos cientos. */
+  batchSoon() {
+    clearTimeout(this._batchT);
+    const roots = () => [...this.buildingBuilder.rootGroup.children.filter((c) => !c.userData.isBatch), this.interiorBuilder.group];
+    const snap = snapshotMatrices(roots());
+    this._batchT = setTimeout(() => {
+      const moving = movingSince(snap);
+      let merged = 0, meshes = 0;
+      for (const r of roots()) { const s = batchStatic(r, { exclude: moving }); merged += s.merged; meshes += s.meshes; }
+      this.shadowsDirty = true;
+      console.info(`[optimización] ${meshes} mallas fusionadas en ${merged}`);
+    }, 1200);
   }
 
   loadFurnitureLater(arch, finishes, rooms) {
@@ -141,6 +163,7 @@ export class MasterplanScene {
       oldGroup.traverse((obj) => { if (obj.isMesh) obj.geometry?.dispose(); });
       this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
       this.scene.add(this.interiorBuilder.build(arch, finishes, furniture, rooms));
+      this.batchSoon();
       if (store.state.viewMode !== 'exterior') this.applyViewMode(store.state.viewMode);
     }).catch((e) => console.warn('Mobiliario de Piso 2 no disponible', e));
     if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1200 });
@@ -361,6 +384,25 @@ export class MasterplanScene {
     }
   }
 
+  /** Baja o sube la resolución interna para mantener la fluidez (cada 2 s, sin saltos bruscos). */
+  _adaptResolution(dt) {
+    const p = this._perf; if (!p) return;
+    p.t += dt; p.ms += dt * 1000; p.n++;
+    if (p.t < 2) return;
+    const avg = p.ms / p.n; p.t = 0; p.ms = 0; p.n = 0;
+    if (document.hidden) return;
+    let pr = this.pixelRatio;
+    if (avg > 38 && pr > 0.6) pr = Math.max(0.6, pr - 0.15);
+    else if (avg < 20 && pr < this.maxPixelRatio) pr = Math.min(this.maxPixelRatio, pr + 0.1);
+    if (Math.abs(pr - this.pixelRatio) < 0.01) return;
+    this.pixelRatio = pr;
+    const w = this.container.clientWidth, h = this.container.clientHeight;
+    this.renderer.setPixelRatio(pr);
+    this.renderer.setSize(w, h);
+    this.postfx?.setPixelRatio(pr);
+    this.postfx?.setSize(w, h);
+  }
+
   animate() {
     requestAnimationFrame(() => this.animate());
     const dt = Math.min(this.clock.getDelta(), 0.1);
@@ -370,6 +412,7 @@ export class MasterplanScene {
     this._clampPivot();
     this._updateRange();
     this.tour?.update(dt);
+    this._adaptResolution(dt);
     if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }

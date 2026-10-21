@@ -101,13 +101,13 @@ export class InteriorLook {
         bloom: fx?.bloom ? [fx.bloom.strength, fx.bloom.radius, fx.bloom.threshold] : null,
         grade: fx?.grade ? { c: fx.grade.uniforms.uContrast.value, s: fx.grade.uniforms.uSaturation.value, v: fx.grade.uniforms.uVignette.value, w: fx.grade.uniforms.uWarm.value.clone() } : null
       };
-      if (app.hemiLight) app.hemiLight.intensity = this._saved.hemi * 0.35;
+      if (app.hemiLight) app.hemiLight.intensity = this._saved.hemi * 0.8;
       if (fx?.bloom) { fx.bloom.strength = 0.42; fx.bloom.radius = 0.62; fx.bloom.threshold = 0.8; }
       if (fx?.grade) {
         const u = fx.grade.uniforms;
-        u.uContrast.value = 1.12; u.uSaturation.value = 0.98; u.uVignette.value = 0.42; u.uWarm.value.set(1.05, 1.0, 0.93);
+        u.uContrast.value = 1.05; u.uSaturation.value = 1.06; u.uVignette.value = 0.22; u.uWarm.value.set(1.04, 1.0, 0.95);
       }
-      if (fx?.ao) { fx.ao.blendIntensity = 1.0; fx.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 0.7, scale: 1.25 }); }
+      if (fx?.ao) { fx.ao.enabled = !fx.low; fx.ao.blendIntensity = 0.8; fx.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 0.7, scale: 1.1 }); }
     }
     app.scene.environment = this.roomEnv;
     // ventanas de esta habitación → luz de área orientada hacia adentro
@@ -118,7 +118,7 @@ export class InteriorLook {
       l.width = Math.max(0.8, w.w); l.height = 1.4;
       l.position.set(w.x, 3.02 + 1.6, w.z).addScaledVector(inward, w.t / 2 + 0.06);
       l.lookAt(l.position.clone().add(inward));
-      l.intensity = 7;
+      l.intensity = 11;
     });
   }
 
@@ -132,7 +132,7 @@ export class InteriorLook {
       const u = fx.grade.uniforms;
       u.uContrast.value = s.grade.c; u.uSaturation.value = s.grade.s; u.uVignette.value = s.grade.v; u.uWarm.value.copy(s.grade.w);
     }
-    if (fx?.ao) { fx.ao.blendIntensity = 0.85; fx.ao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 2.0, scale: 1.0 }); }
+    if (fx?.ao) { fx.ao.enabled = fx.aoExterior; fx.ao.blendIntensity = 0.85; fx.ao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 2.0, scale: 1.0 }); }
     this.windowLights.forEach((l) => { l.intensity = 0; });
     app.scene.environment = app.skyEnv?.envRT?.texture || null;
   }

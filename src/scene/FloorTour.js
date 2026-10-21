@@ -452,10 +452,10 @@ export class FloorTour {
     this.group.visible = on;
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
-    R.toneMappingExposure = on ? this._baseExposure * 1.2 : this._baseExposure;
+    R.toneMappingExposure = on ? this._baseExposure * 1.35 : this._baseExposure;
     if (on) this.look?.enable(r || this.current); else this.look?.disable();
-    this.roomLight.intensity = on ? 9 : 0;
-    this.fillLight.intensity = on ? 4 : 0;
+    this.roomLight.intensity = on ? 12 : 0;
+    this.fillLight.intensity = on ? 6 : 0;
     if (on && r) {
       this.roomLight.position.set(r.pole.x, P2 + 2.15, r.pole.z);
       const v = r.vps[0].pos;
