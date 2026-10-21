@@ -336,7 +336,7 @@ export class CityContext {
 
   /** Árboles a partir de la ortofoto: píxeles verdes, oscuros y con textura (copas, no césped). */
 
-}
+
 
   /** Árboles de contexto detectados en ortofoto, con copas continuas y distribución agrupada. */
   _buildTrees(L) {
