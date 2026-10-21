@@ -16,7 +16,7 @@ jobs:
       - name: Descargar texturas
         run: |
           mkdir -p assets/textures/pbr
-          for id in asphalt_02 concrete_floor_worn_001 leafy_grass; do
+          for id in asphalt_02 concrete_floor_worn_001 concrete_pavement leafy_grass; do
             for k in diff nor_gl; do
               curl -fsSL -o "assets/textures/pbr/${id}_${k}_1k.jpg" \
                 "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/${id}/${id}_${k}_1k.jpg"
