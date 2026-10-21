@@ -203,11 +203,12 @@ export class FloorTour {
       }
     }
     // luz cálida de la habitación activa + relleno
-    this.roomLight = new THREE.PointLight(0xffd7a3, 9, 10, 1.6);
+    // Las luces viven siempre en la escena (intensidad 0 fuera del recorrido): así el número de luces
+    // no cambia y la GPU no tiene que recompilar todos los materiales al entrar a una habitación.
+    this.roomLight = new THREE.PointLight(0xffd7a3, 0, 10, 1.6);
     this.roomLight.position.set(0, P2 + 2.2, 0);
-    this.group.add(this.roomLight);
-    this.fillLight = new THREE.PointLight(0xfff4e6, 4, 8, 1.6);
-    this.group.add(this.fillLight);
+    this.fillLight = new THREE.PointLight(0xfff4e6, 0, 8, 1.6);
+    this.app.scene.add(this.roomLight, this.fillLight);
   }
 
   _windowTexture() {
@@ -427,6 +428,8 @@ export class FloorTour {
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
     R.toneMappingExposure = on ? this._baseExposure * 1.25 : this._baseExposure;
+    this.roomLight.intensity = on ? 9 : 0;
+    this.fillLight.intensity = on ? 4 : 0;
     if (on && r) {
       this.roomLight.position.set(r.pole.x, P2 + 2.15, r.pole.z);
       const v = r.vps[0].pos;
