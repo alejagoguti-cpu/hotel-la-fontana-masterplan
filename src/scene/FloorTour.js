@@ -646,6 +646,8 @@ export class FloorTour {
 
   // ------------------------------------------------------------- por frame
   update() {
+    // el cielo raso solo aparece al cruzarlo (así el descenso no "choca" contra una losa blanca)
+    if (this.ceiling && this.group.visible) this.ceiling.visible = this.app.camera.position.y < P2 + CEIL - 0.03;
     if (this.badgesOn && this.badgeEls) {
       const rect = this.app.container.getBoundingClientRect();
       for (const b of this.badgeEls) {
