@@ -100,10 +100,10 @@ export class MasterplanScene {
   }
 
   async loadData() {
-    const [arch, finishes, furn, rooms, catastro, urbanNetwork, revitWindows, roofs] = await Promise.all([
+    const [arch, finishes, rooms, catastro, urbanNetwork, revitWindows, roofs] = await Promise.all([
       fetch('./data/geometry/p2-architecture.json').then(r => r.json()),
       fetch('./data/geometry/p2-finishes.json').then(r => r.json()),
-      fetch('./data/geometry/p2-furniture.json').then(r => r.json()),
+      
       fetch('./data/rooms-piso2.json').then(r => r.json()),
       fetch('./data/geometry/catastro-buildings-3d.json').then(r => r.json()).catch(() => []),
       fetch('./data/geometry/urban-roads-trees-3d.json').then(r => r.json()).catch(() => ({})),
@@ -119,14 +119,27 @@ export class MasterplanScene {
     this.scene.add(building);
 
     // 2. Interior Piso 2
-    const interior = this.interiorBuilder.build(arch, finishes, furn, rooms);
-    this.scene.add(interior);
+    const interior = this.interiorBuilder.build(arch, finishes, {}, rooms);
+    this.scene.add(interior); this.loadFurnitureLater(arch, finishes, rooms);
 
     // 3. Room highlights
     this.roomHighlighter.build(rooms);
 
     store.setState({ rooms });
     this.applyViewMode(store.state.viewMode);
+  }
+
+  loadFurnitureLater(arch, finishes, rooms) {
+    const load = () => fetch('./data/geometry/p2-furniture.json').then((r) => r.json()).then((furniture) => {
+      const oldGroup = this.interiorBuilder.group;
+      this.scene.remove(oldGroup);
+      oldGroup.traverse((obj) => { if (obj.isMesh) obj.geometry?.dispose(); });
+      this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
+      this.scene.add(this.interiorBuilder.build(arch, finishes, furniture, rooms));
+      if (store.state.viewMode !== 'exterior') this.applyViewMode(store.state.viewMode);
+    }).catch((e) => console.warn('Mobiliario de Piso 2 no disponible', e));
+    if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1200 });
+    else setTimeout(load, 300);
   }
 
   setupEvents() {
