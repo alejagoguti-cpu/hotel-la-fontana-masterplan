@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { store } from '../state/store.js';
+import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
 
 /**
  * FloorTour — Experiencia "Piso 2" tipo sitio de desarrolladora:
@@ -8,6 +9,8 @@ import { store } from '../state/store.js';
  *  2. Clic en una habitación → la cámara "entra" (vuelo + descenso a altura de ojos).
  *  3. Recorrido por la habitación: mirar alrededor arrastrando, vistas (Entrada, Alcoba, Ventana,
  *     Baño…), habitación anterior/siguiente, minimapa con la posición y ficha de la unidad.
+ *  4. Caminar con W A S D o las flechas (Shift = más rápido, Q/E = girar), con colisión contra muros.
+ *  5. Modo render de interior (InteriorLook): materiales con relieve, luz de ventana y downlights.
  */
 const P2 = 3.02;        // cota del Piso 2
 const EYE = 1.6;        // altura de ojos
@@ -69,7 +72,10 @@ export class FloorTour {
     this.rooms.forEach((r) => this.byId.set(r.id, r));
     // orden de recorrido: por número de habitación
     this.rooms.sort((a, b) => Number(a.data.number) - Number(b.data.number));
+    try { upgradeInteriorMaterials(this.app.materials); } catch (e) { console.warn('materiales interior', e); }
+    try { this.look = new InteriorLook(this.app); } catch (e) { console.warn('render interior', e); }
     this._buildInteriorDressing(arch);
+    this._initWalk(arch);
     this._buildDOM();
   }
 
@@ -183,6 +189,7 @@ export class FloorTour {
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
+    winMat.color.setScalar(2.1); // más brillante que el interior: la luz de día "quema" y florece (bloom)
     const frameMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5, metalness: 0.3 });
     for (const r of this.rooms) {
       for (const w of r.wins) {
@@ -203,6 +210,21 @@ export class FloorTour {
       }
     }
     // luz cálida de la habitación activa + relleno
+    // downlights empotrados en el cielo raso (emisivos: brillan con el bloom)
+    const dlGeo = new THREE.CircleGeometry(0.075, 20); dlGeo.rotateX(Math.PI / 2);
+    const dlMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.2, 2.8, 2.2), fog: false });
+    const ringGeo = new THREE.RingGeometry(0.075, 0.1, 20); ringGeo.rotateX(Math.PI / 2);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xd8d4cc, roughness: 0.35, metalness: 0.6, side: THREE.DoubleSide });
+    for (const r of this.rooms) {
+      const spots = [r.pole, ...r.vps.filter((v) => !v.name.startsWith('Baño')).map((v) => ({ x: v.pos.x, z: v.pos.z }))];
+      const placed = [];
+      for (const p of spots) {
+        if (placed.some((q) => Math.hypot(q.x - p.x, q.z - p.z) < 1.6)) continue;
+        placed.push(p);
+        const d = new THREE.Mesh(dlGeo, dlMat); d.position.set(p.x, P2 + CEIL - 0.006, p.z); this.group.add(d);
+        const g = new THREE.Mesh(ringGeo, ringMat); g.position.set(p.x, P2 + CEIL - 0.004, p.z); this.group.add(g);
+      }
+    }
     // Las luces viven siempre en la escena (intensidad 0 fuera del recorrido): así el número de luces
     // no cambia y la GPU no tiene que recompilar todos los materiales al entrar a una habitación.
     this.roomLight = new THREE.PointLight(0xffd7a3, 0, 10, 1.6);
@@ -350,6 +372,7 @@ export class FloorTour {
 
     const v = r.vps[this.vpIndex];
     const cam = this.app.camera, ctl = this.app.controls;
+    this._busy = true;
     gsap.killTweensOf(cam.position); gsap.killTweensOf(ctl.target);
     this._setControlsFree();
     ctl.enabled = false;
@@ -374,6 +397,7 @@ export class FloorTour {
   /** Coloca la cámara en un punto de vista y activa "mirar alrededor". */
   _placeAt(v) {
     const r = this.current;
+    this._busy = false;
     this._showDressing(true, r);
     const cam = this.app.camera, ctl = this.app.controls;
     const dir = v.look.clone().sub(v.pos).normalize();
@@ -406,6 +430,7 @@ export class FloorTour {
   /** Fundido a negro suave con un pequeño avance de cámara al reaparecer. */
   _fadeTo(fn) {
     const veil = this.dom.veil;
+    this._busy = true;
     return new Promise((res) => {
       gsap.to(veil, {
         opacity: 1, duration: 0.32, ease: 'power1.in',
@@ -417,7 +442,7 @@ export class FloorTour {
           cam.position.addScaledVector(dir, -0.45); ctl.target.addScaledVector(dir, -0.45);
           gsap.to(cam.position, { x: end.x, y: end.y, z: end.z, duration: 0.9, ease: 'power2.out' });
           gsap.to(ctl.target, { x: endT.x, y: endT.y, z: endT.z, duration: 0.9, ease: 'power2.out' });
-          gsap.to(veil, { opacity: 0, duration: 0.55, ease: 'power1.out', onComplete: res });
+          gsap.to(veil, { opacity: 0, duration: 0.55, ease: 'power1.out', onComplete: () => { this._busy = false; res(); } });
         }
       });
     });
@@ -427,7 +452,8 @@ export class FloorTour {
     this.group.visible = on;
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
-    R.toneMappingExposure = on ? this._baseExposure * 1.25 : this._baseExposure;
+    R.toneMappingExposure = on ? this._baseExposure * 1.2 : this._baseExposure;
+    if (on) this.look?.enable(r || this.current); else this.look?.disable();
     this.roomLight.intensity = on ? 9 : 0;
     this.fillLight.intensity = on ? 4 : 0;
     if (on && r) {
@@ -506,7 +532,7 @@ export class FloorTour {
       <button class="ft-arrow prev" data-act="prev" title="Habitación anterior">‹</button>
       <button class="ft-arrow next" data-act="next" title="Habitación siguiente">›</button>
       <div class="ft-tabs"></div>
-      <div class="ft-hint">Arrastra para mirar alrededor</div>
+      <div class="ft-hint">Arrastra para mirar · <b>W A S D</b> o flechas para caminar · Shift corre · Q/E giran</div>
       <div class="ft-map"><canvas width="420" height="300"></canvas><div class="r-mapname"></div></div>
       <div class="ft-card"></div>`);
     this.dom = { veil, badges, plan, room, tabs: room.querySelector('.ft-tabs'), card: room.querySelector('.ft-card'), map: room.querySelector('canvas'), hint: room.querySelector('.ft-hint') };
@@ -608,7 +634,7 @@ export class FloorTour {
       <button class="btn ghost" data-act="plan">Volver a la planta</button>`;
     this.dom.hint.style.opacity = '1';
     clearTimeout(this._hintT);
-    this._hintT = setTimeout(() => { this.dom.hint.style.opacity = '0'; }, 4000);
+    this._hintT = setTimeout(() => { this.dom.hint.style.opacity = '0'; }, 6000);
   }
 
   _updateRoomUI() {
@@ -644,8 +670,87 @@ export class FloorTour {
     g.beginPath(); g.arc(u, v, 6, 0, 7); g.fill(); g.stroke();
   }
 
+  // ------------------------------------------------------------- caminar
+  _initWalk(arch) {
+    this.wallSegs = (arch?.walls || []).map((w) => {
+      const pts = w[1];
+      if (!pts || pts.length < 2) return null;
+      const [ax, az] = toW(pts[0]), [bx, bz] = toW(pts[1]);
+      return { ax, az, bx, bz, r: Math.max((w[2] || 120) / 2000, 0.04) + 0.2 };
+    }).filter(Boolean);
+    const slab = arch?.slabLoops?.[0]?.loops?.[0];
+    this.slabPoly = slab ? slab.map(toW) : null;
+    this.keys = new Set();
+    const WALK_KEYS = ['w', 'a', 's', 'd', 'q', 'e', 'shift', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'];
+    window.addEventListener('keydown', (e) => {
+      if (this.mode !== 'room' || e.target?.closest?.('input,textarea,select,[contenteditable]')) return;
+      const k = e.key.toLowerCase();
+      if (!WALK_KEYS.includes(k)) return;
+      this.keys.add(k);
+      if (k.startsWith('arrow')) e.preventDefault();
+      if (this.dom?.hint) this.dom.hint.style.opacity = '0';
+    });
+    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
+    window.addEventListener('blur', () => this.keys.clear());
+  }
+
+  _blocked(x, z) {
+    if (this.slabPoly && !pointInPoly(x, z, this.slabPoly)) return true;
+    for (const s of this.wallSegs) {
+      const vx = s.bx - s.ax, vz = s.bz - s.az, L = vx * vx + vz * vz || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - s.ax) * vx + (z - s.az) * vz) / L));
+      if (Math.hypot(x - s.ax - t * vx, z - s.az - t * vz) < s.r) return true;
+    }
+    return false;
+  }
+
+  _walk(dt) {
+    const k = this.keys;
+    if (this.mode !== 'room' || this._busy || !k?.size) return;
+    const cam = this.app.camera, ctl = this.app.controls;
+    const has = (...a) => a.some((x) => k.has(x));
+    const fwd = (has('w', 'arrowup') ? 1 : 0) - (has('s', 'arrowdown') ? 1 : 0);
+    const side = (has('d', 'arrowright') ? 1 : 0) - (has('a', 'arrowleft') ? 1 : 0);
+    const turn = (has('e') ? 1 : 0) - (has('q') ? 1 : 0);
+    const look = ctl.target.clone().sub(cam.position);
+    if (turn) {
+      look.applyAxisAngle(new THREE.Vector3(0, 1, 0), -turn * 1.5 * dt);
+      ctl.target.copy(cam.position).add(look);
+    }
+    if (!fwd && !side) return;
+    const f = new THREE.Vector2(look.x, look.z);
+    if (f.lengthSq() < 1e-8) return;
+    f.normalize();
+    const rgt = new THREE.Vector2(-f.y, f.x);
+    const mv = f.multiplyScalar(fwd).add(rgt.multiplyScalar(side));
+    if (mv.lengthSq() < 1e-8) return;
+    mv.normalize().multiplyScalar((k.has('shift') ? 2.8 : 1.35) * dt);
+    const x = cam.position.x, z = cam.position.z;
+    let nx = x + mv.x, nz = z + mv.y;
+    if (this._blocked(nx, nz)) {
+      // deslizar a lo largo del muro
+      if (!this._blocked(x + mv.x, z)) nz = z;
+      else if (!this._blocked(x, z + mv.y)) nx = x;
+      else return;
+    }
+    const dx = nx - x, dz = nz - z;
+    cam.position.x += dx; cam.position.z += dz;
+    ctl.target.x += dx; ctl.target.z += dz;
+    if (this.vpIndex !== -1) { this.vpIndex = -1; this._updateRoomUI(); }
+    // al cruzar a otra habitación, se actualizan ficha, luces y minimapa
+    const here = this.rooms.find((r) => pointInPoly(nx, nz, r.poly));
+    if (here && here !== this.current) {
+      this.current = here;
+      this._renderRoomUI();
+      this._showDressing(true, here);
+      if (store.state.selectedRoomId !== here.id) store.setState({ selectedRoomId: here.id });
+    }
+  }
+
   // ------------------------------------------------------------- por frame
-  update() {
+  update(dt = 0.016) {
+    this.look?.update();
+    this._walk(dt);
     // el cielo raso solo aparece al cruzarlo (así el descenso no "choca" contra una losa blanca)
     if (this.ceiling && this.group.visible) this.ceiling.visible = this.app.camera.position.y < P2 + CEIL - 0.03;
     if (this.badgesOn && this.badgeEls) {

@@ -9,6 +9,7 @@ import { SkyEnvironment } from './SkyEnvironment.js';
 import { PostFX } from './PostFX.js';
 import { CityContext } from './CityContext.js';
 import { FloorTour } from './FloorTour.js';
+import { NetworksLayer } from './NetworksLayer.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -55,6 +56,7 @@ export class MasterplanScene {
     this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
     this.roomHighlighter = new RoomHighlighter(this.scene);
     this.tour = new FloorTour(this);
+    try { this.networks = new NetworksLayer(this); } catch (e) { console.warn('Capa de redes no disponible', e); }
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
