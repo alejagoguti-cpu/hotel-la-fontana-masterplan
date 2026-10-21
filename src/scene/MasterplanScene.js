@@ -387,7 +387,7 @@ export class MasterplanScene {
 
   /** Baja o sube la resolución interna para mantener la fluidez (cada 2 s, sin saltos bruscos). */
   _adaptResolution(dt) {
-    const p = this._perf; if (!p) return;
+    const p = this._perf; if (!p || dt >= 0.1) return; // cuadros congelados (pestaña oculta) no cuentan
     p.t += dt; p.ms += dt * 1000; p.n++;
     if (p.t < 2) return;
     const avg = p.ms / p.n; p.t = 0; p.ms = 0; p.n = 0;
