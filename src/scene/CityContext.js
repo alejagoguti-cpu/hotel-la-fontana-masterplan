@@ -337,3 +337,91 @@ export class CityContext {
   /** Árboles a partir de la ortofoto: píxeles verdes, oscuros y con textura (copas, no césped). */
 
 }
+
+  /** Árboles de contexto detectados en ortofoto, con copas continuas y distribución agrupada. */
+  _buildTrees(L) {
+    if (!L.ctx) return;
+    const W = L.canvas.width, H = L.canvas.height;
+    const px = L.ctx.getImageData(0, 0, W, H).data;
+    const mpp = (L.x1 - L.x0) / W;
+    // Menos ejemplares y mayor separación: el fondo conserva la lectura del barrio y no
+    // compite con los árboles 3D detallados junto al hotel.
+    const step = this.mobile ? 12 : 9.5;
+    const max = this.mobile ? 850 : 3200;
+    const greenAt = (u, v) => {
+      if (u < 0 || v < 0 || u >= W || v >= H) return false;
+      const i = (v * W + u) * 4, r = px[i], g = px[i + 1], b = px[i + 2];
+      return g - r > 9 && g - b > 12 && g > 24 && g < 165;
+    };
+    const lum = (i) => 0.3 * px[i] + 0.59 * px[i + 1] + 0.11 * px[i + 2];
+    const rand = (x, z, seed = 0) => {
+      const v = Math.sin(x * 12.9898 + z * 78.233 + seed * 37.719) * 43758.5453;
+      return v - Math.floor(v);
+    };
+    const pts = [];
+    for (let z = L.zN + 5; z < L.zS - 5; z += step) {
+      for (let x = L.x0 + 5; x < L.x1 - 5; x += step) {
+        const jx = x + (rand(x, z, 1) - 0.5) * step * 0.55;
+        const jz = z + (rand(x, z, 2) - 0.5) * step * 0.55;
+        if (Math.hypot(jx - 10, jz - 5) < 245) continue; // el arbolado próximo ya está modelado
+        const u = Math.floor((jx - L.x0) / mpp), v = Math.floor((jz - L.zN) / mpp);
+        if (u < 5 || v < 5 || u >= W - 5 || v >= H - 5) continue;
+
+        // Aceptar manchas vegetales, no píxeles verdes aislados de cubiertas o señalización.
+        let greenNeighbors = 0;
+        for (let dv = -4; dv <= 4; dv += 2) {
+          for (let du = -4; du <= 4; du += 2) {
+            if (greenAt(u + du, v + dv)) greenNeighbors++;
+          }
+        }
+        if (greenNeighbors < 7) continue;
+        const i = (v * W + u) * 4, r = px[i], g = px[i + 1], b = px[i + 2];
+        let s = 0, s2 = 0, n = 0;
+        for (let dv = -3; dv <= 3; dv += 2) for (let du = -3; du <= 3; du += 2) {
+          const value = lum(((v + dv) * W + u + du) * 4);
+          s += value; s2 += value * value; n++;
+        }
+        const sd = Math.sqrt(Math.max(0, s2 / n - (s / n) ** 2));
+        if (sd < 7) continue;
+        pts.push([jx, jz, r, g, b, rand(x, z, 3), rand(x, z, 4), rand(x, z, 5)]);
+        if (pts.length >= max) break;
+      }
+      if (pts.length >= max) break;
+    }
+    if (!pts.length) return;
+
+    // Una copa redondeada y sombreada evita el aspecto de poliedros separados del fondo anterior.
+    const crownGeo = new THREE.SphereGeometry(1, 10, 8);
+    const trunkGeo = new THREE.CylinderGeometry(0.11, 0.17, 1, 6);
+    trunkGeo.translate(0, 0.5, 0);
+    const crownMat = new THREE.MeshStandardMaterial({ roughness: 0.96, metalness: 0 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x49392b, roughness: 1 });
+    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, pts.length);
+    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, pts.length);
+    const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion();
+    const scale = new THREE.Vector3(), position = new THREE.Vector3(), color = new THREE.Color();
+    const up = new THREE.Vector3(0, 1, 0);
+    pts.forEach(([x, z, r, g, b, variation, widthVariation, hueVariation], k) => {
+      const groundY = this.heightAt(x, z);
+      const radius = 2.0 + widthVariation * 1.6;
+      const crownHeight = 3.6 + variation * 2.2;
+      const trunkHeight = 2.4 + hueVariation * 2.2;
+      rotation.setFromAxisAngle(up, rand(x, z, 6) * Math.PI * 2);
+      position.set(x, groundY + trunkHeight + crownHeight * 0.4, z);
+      matrix.compose(position, rotation, scale.set(radius, crownHeight * 0.58, radius * (0.78 + variation * 0.16)));
+      crowns.setMatrixAt(k, matrix);
+
+      color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
+      color.lerp(new THREE.Color(0x59784c), 0.32).multiplyScalar(1.04);
+      if (hueVariation > 0.72) color.lerp(new THREE.Color(0x82905a), 0.14);
+      crowns.setColorAt(k, color);
+
+      matrix.compose(position.set(x, groundY, z), rotation, scale.set(0.82, trunkHeight + 0.25, 0.82));
+      trunks.setMatrixAt(k, matrix);
+    });
+    crowns.castShadow = trunks.castShadow = true;
+    crowns.receiveShadow = true;
+    this.group.add(crowns, trunks);
+    this.trees = crowns;
+  }
+
