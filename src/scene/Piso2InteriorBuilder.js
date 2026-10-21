@@ -2,6 +2,19 @@ import * as THREE from 'three';
 import { loopToShape, applyArchitecturalBrickUVs } from './HotelBuildingBuilder.js';
 
 const MM_TO_M = 0.001;
+
+/** UV en metros para las 6 caras de un BoxGeometry(ancho, alto, fondo). */
+function metricBoxUV(geo, w, h, d) {
+  const uv = geo.attributes.uv;
+  const sizes = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]]; // px, nx, py, ny, pz, nz
+  for (let f = 0; f < 6; f++) {
+    for (let k = 0; k < 4; k++) {
+      const i = f * 4 + k;
+      uv.setXY(i, uv.getX(i) * sizes[f][0], uv.getY(i) * sizes[f][1]);
+    }
+  }
+  uv.needsUpdate = true;
+}
 const PISO2_Y = 3.02; // Base elevation of Piso 2 in meters
 
 /**
@@ -236,6 +249,7 @@ export class Piso2InteriorBuilder {
       else if (code === 'E-5') matKey = 'WALL_LISMORE';
 
       const geo = new THREE.BoxGeometry(len, h, thick);
+      metricBoxUV(geo, len, h, thick); // textura a escala real (sin estirar la veta)
       const mesh = new THREE.Mesh(geo, this.materials.get(matKey));
       mesh.position.set((x1 + x2) / 2, yBottom + h / 2, (z1 + z2) / 2);
       mesh.rotation.y = -Math.atan2(z2 - z1, x2 - x1);

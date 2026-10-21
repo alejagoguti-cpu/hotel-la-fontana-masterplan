@@ -94,9 +94,21 @@ export class RoomHighlighter {
         item.edges.material.color.setHex(0xffffff);
       } else {
         item.mesh.material = this.matNormal;
-        item.edges.material.color.setHex(0xff4d58);
+        item.edges.material.color.setHex(this.edgeColor ?? 0xff4d58);
       }
     }
+  }
+
+  /** 'plan': estilo planta comercial (naranja, relleno sutil) · 'default': volúmenes rojos del exterior. */
+  setTheme(theme) {
+    const plan = theme === 'plan';
+    this.matNormal.color.setHex(plan ? 0xf26b1d : 0xd81e28); this.matNormal.opacity = plan ? 0.06 : 0.38;
+    this.matHover.color.setHex(plan ? 0xff7a2e : 0xff3b47); this.matHover.opacity = plan ? 0.42 : 0.58;
+    this.matSelected.color.setHex(plan ? 0xff8a3d : 0xffffff); this.matSelected.opacity = plan ? 0.22 : 0.72;
+    this.wireframeMatSelected.color.setHex(plan ? 0xffb37a : 0xffffff);
+    this.edgeColor = plan ? 0xff7a2e : 0xff4d58;
+    for (const item of this.roomGroups.values()) item.edges.material.color?.setHex(this.edgeColor);
+    this.setSelected(this.selectedRoomId);
   }
 
   setSelected(roomId) {

@@ -8,6 +8,7 @@ import { store } from '../state/store.js';
 import { SkyEnvironment } from './SkyEnvironment.js';
 import { PostFX } from './PostFX.js';
 import { CityContext } from './CityContext.js';
+import { FloorTour } from './FloorTour.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -53,6 +54,7 @@ export class MasterplanScene {
     this.buildingBuilder = new HotelBuildingBuilder(this.materials);
     this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
     this.roomHighlighter = new RoomHighlighter(this.scene);
+    this.tour = new FloorTour(this);
 
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
@@ -124,6 +126,7 @@ export class MasterplanScene {
 
     // 3. Room highlights
     this.roomHighlighter.build(rooms);
+    try { this.tour.init(rooms, arch); } catch (e) { console.warn('Recorrido Piso 2 no disponible', e); }
 
     store.setState({ rooms });
     this.applyViewMode(store.state.viewMode);
@@ -151,6 +154,7 @@ export class MasterplanScene {
     });
 
     const onPointerMove = (e) => {
+      if (this.tour?.mode === 'room') return;
       const rect = this.container.getBoundingClientRect();
       this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -175,6 +179,7 @@ export class MasterplanScene {
     };
 
     const onClick = (e) => {
+      if (this.tour?.mode === 'room') return;
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const isBimMode = store.state.bimInspectorOpen;
 
@@ -203,13 +208,15 @@ export class MasterplanScene {
 
     // Subscribe to store updates
     store.subscribe((state) => {
-      this.roomHighlighter.setVisibility(state.showRoomsOverlay);
+      this.roomHighlighter.setVisibility(state.showRoomsOverlay && this.tour?.mode !== 'room');
       this.roomHighlighter.setSelected(state.selectedRoomId);
       this.applyViewMode(state.viewMode);
     });
   }
 
   selectRoom(roomId) {
+    // en la planta del Piso 2, elegir una habitación = entrar a recorrerla
+    if (this._mode === 'interior' && this.tour?.byId.has(roomId)) { this.tour.enterRoom(roomId); return; }
     store.setState({ selectedRoomId: roomId });
     const room = store.rooms?.find(r => r.id === roomId) || store.state.rooms.find(r => r.id === roomId);
     if (!room) return;
@@ -261,25 +268,34 @@ export class MasterplanScene {
   }
 
   applyViewMode(mode) {
+    // solo actúa cuando el modo cambia (antes cualquier cambio del estado reiniciaba la cámara)
+    if (mode === this._mode) return;
+    this._mode = mode;
     this.setOrbitLimits(mode);
     if (mode === 'interior') {
-      // Cutaway: hide upper floors and exterior shell of Piso 2
-      this.buildingBuilder.upperBuildingGroup.visible = false;
-      this.buildingBuilder.exteriorShellPiso2.visible = false;
-      gsap.to(this.camera.position, { x: 32, y: 19, z: 28, duration: 1.2, ease: 'power2.inOut' });
-      gsap.to(this.controls.target, { x: 16, y: 4.2, z: 2, duration: 1.2, ease: 'power2.inOut' });
+      // Piso 2: la cubierta se levanta y la cámara baja a la planta de habitaciones
+      if (this.tour?.rooms.length) {
+        if (this.tour._skipPlanCamera) { this.tour._skipPlanCamera = false; this.tour.lift(true); }
+        else this.tour.enterPlan();
+      } else {
+        this.buildingBuilder.upperBuildingGroup.visible = false;
+        this.buildingBuilder.exteriorShellPiso2.visible = false;
+        gsap.to(this.camera.position, { x: 32, y: 19, z: 28, duration: 1.2, ease: 'power2.inOut' });
+        gsap.to(this.controls.target, { x: 16, y: 4.2, z: 2, duration: 1.2, ease: 'power2.inOut' });
+      }
     } else if (mode === 'top') {
-      this.buildingBuilder.upperBuildingGroup.visible = false;
-      this.buildingBuilder.exteriorShellPiso2.visible = false;
+      this.tour?.leave(false);
+      if (this.tour) this.tour.lift(true);
+      else { this.buildingBuilder.upperBuildingGroup.visible = false; this.buildingBuilder.exteriorShellPiso2.visible = false; }
       gsap.to(this.camera.position, { x: 16, y: 75, z: 2.1, duration: 1.2, ease: 'power2.inOut' });
       gsap.to(this.controls.target, { x: 16, y: 3.5, z: 2, duration: 1.2, ease: 'power2.inOut' });
     } else {
-      // Full exterior 6-story hotel
-      this.buildingBuilder.upperBuildingGroup.visible = true;
-      this.buildingBuilder.exteriorShellPiso2.visible = true;
-      // vista aérea tipo masterplan (el hotel dentro de su barrio, cerros al fondo)
-      gsap.to(this.camera.position, { x: -150, y: 135, z: 215, duration: 1.6, ease: 'power2.inOut' });
-      gsap.to(this.controls.target, { x: 24, y: 4.0, z: 0, duration: 1.6, ease: 'power2.inOut' });
+      // Exterior: la cubierta vuelve a bajar y la cámara sale a la vista aérea del barrio
+      this.tour?.leave(true);
+      if (!this.tour) { this.buildingBuilder.upperBuildingGroup.visible = true; this.buildingBuilder.exteriorShellPiso2.visible = true; }
+      gsap.killTweensOf(this.camera.position); gsap.killTweensOf(this.controls.target);
+      gsap.to(this.camera.position, { x: -150, y: 135, z: 215, duration: 1.8, ease: 'power2.inOut' });
+      gsap.to(this.controls.target, { x: 24, y: 4.0, z: 0, duration: 1.8, ease: 'power2.inOut' });
     }
   }
 
@@ -306,7 +322,7 @@ export class MasterplanScene {
   _updateRange() {
     const cam = this.camera;
     const dist = cam.position.distanceTo(this.controls.target);
-    const near = THREE.MathUtils.clamp(dist * 0.012, 0.3, 30);
+    const near = THREE.MathUtils.clamp(dist * 0.012, this.tour?.mode === 'room' ? 0.05 : 0.3, 30);
     if (Math.abs(near - cam.near) > 0.02 * cam.near) { cam.near = near; cam.updateProjectionMatrix(); }
     if (this.scene.fog) {
       this.scene.fog.near = 180 + dist * 0.9;
@@ -351,6 +367,7 @@ export class MasterplanScene {
     this.controls.update();
     this._clampPivot();
     this._updateRange();
+    this.tour?.update(dt);
     if (this.postfx) this.postfx.render(dt); else this.renderer.render(this.scene, this.camera);
   }
 }
