@@ -16,7 +16,7 @@ function seeded(seed) {
 }
 
 /** Textura de adoquín de arcilla en trabado (running bond). */
-export function makePaverTexture({ palette, mortar, size = 1024, cols = 12, rows = 26, seed = 3, speckle = 0.35 }) {
+export function makePaverTexture({ palette, mortar, size = 2048, cols = 12, rows = 26, seed = 3, speckle = 0.35 }) {
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const g = c.getContext('2d');
@@ -30,8 +30,15 @@ export function makePaverTexture({ palette, mortar, size = 1024, cols = 12, rows
       const x = k * bw + off, y = r * bh;
       g.fillStyle = palette[Math.floor(rnd() * palette.length)];
       g.fillRect(x + gap, y + gap, bw - 2 * gap, bh - 2 * gap);
+      const bevel = g.createLinearGradient(x + gap, y + gap, x + bw - gap, y + bh - gap);
+      bevel.addColorStop(0, 'rgba(255,255,255,0.22)');
+      bevel.addColorStop(0.16, 'rgba(255,255,255,0.05)');
+      bevel.addColorStop(0.84, 'rgba(0,0,0,0.02)');
+      bevel.addColorStop(1, 'rgba(0,0,0,0.20)');
+      g.fillStyle = bevel;
+      g.fillRect(x + gap, y + gap, bw - 2 * gap, bh - 2 * gap);
       // moteado y desgaste
-      const n = Math.floor(14 * speckle * 3);
+      const n = Math.floor(28 * speckle * 3);
       for (let i = 0; i < n; i++) {
         g.fillStyle = rnd() < 0.5 ? `rgba(255,255,255,${0.05 + rnd() * 0.08})` : `rgba(0,0,0,${0.06 + rnd() * 0.1})`;
         g.fillRect(x + gap + rnd() * (bw - 3 * gap), y + gap + rnd() * (bh - 3 * gap), 1 + rnd() * 3, 1 + rnd() * 3);
@@ -70,7 +77,7 @@ export class SiteDetails {
     const t = this.walkTex.clone();
     t.needsUpdate = true;
     t.repeat.set(1 / 2.0, 1 / 2.0);  // textura = 2 m x 2 m
-    m.map = t;
+    m.map = m.bumpMap = t; m.bumpScale = 0.045;
     m.color.setHex(0xffffff);
     m.roughness = 0.85;
     m.needsUpdate = true;
@@ -81,7 +88,7 @@ export class SiteDetails {
     const t = this.courtTex.clone();
     t.needsUpdate = true;
     t.repeat.set(w / 3.0, d / 3.0);   // textura = 3 m
-    const mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.88, metalness: 0.0 });
+    const mat = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.045, roughness: 0.91, metalness: 0.0 });
     const geo = new THREE.PlaneGeometry(w, d);
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI / 2;
@@ -96,7 +103,7 @@ export class SiteDetails {
     const t = this.courtTex.clone();
     t.needsUpdate = true;
     t.repeat.set(1 / 3.0, 1 / 3.0);
-    const mat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.88, metalness: 0.0 });
+    const mat = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.045, roughness: 0.91, metalness: 0.0 });
     const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);
