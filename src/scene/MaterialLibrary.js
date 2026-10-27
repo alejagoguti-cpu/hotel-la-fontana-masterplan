@@ -349,7 +349,7 @@ export class MaterialLibrary {
     this.materials.set('AVENA', this.realMaterial('tejido_avena', 0.45, { roughness: 1, normalScale: 1 }));
     this.materials.set('OLIVA', this.realMaterial('tejido_oliva', 0.45, { roughness: 1, normalScale: 1 }));
     this.materials.set('TERRACOTA', this.realMaterial('tejido_terracota', 0.45, { roughness: 1, normalScale: 1 }));
-    this.materials.set('LENCERIA', this.realMaterial('cama_blanca', 0.5, { roughness: 1, normalScale: 0.35, color: 0xf4efe6 }));
+    this.materials.set('LENCERIA', this.realMaterial('cama_blanca', 0.9, { roughness: 1, normalScale: 0.12, color: 0xf6f1e8 }));
     this.materials.set('HALL_ALFOMBRA', this.realMaterial('alfombra_hall', 1.6, { roughness: 1, normalScale: 0.9 }));
     this.materials.set('TA01', this.realMaterial('tapete_lana', 0.4, { roughness: 1, normalScale: 0.9 }));
     this.materials.set('TA02', this.realMaterial('tapete_puntos', 0.55, { roughness: 1, normalScale: 0.9 }));

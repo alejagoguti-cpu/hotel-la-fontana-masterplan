@@ -165,7 +165,7 @@ export class MasterplanScene {
       oldGroup.traverse((obj) => { if (obj.isMesh) obj.geometry?.dispose(); });
       this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
       this.scene.add(this.interiorBuilder.build(arch, finishes, furniture, rooms));
-      this._useRevitFurniture(rooms);
+      this._useRevitFurniture(rooms, furniture);
       this.batchSoon();
       if (store.state.viewMode !== 'exterior') this.applyViewMode(store.state.viewMode);
     }).catch((e) => console.warn('Mobiliario de Piso 2 no disponible', e));
@@ -174,8 +174,8 @@ export class MasterplanScene {
   }
 
   /** Mobiliario real del Revit (por capas Doble / Sencilla…) en vez del simplificado. */
-  _useRevitFurniture(rooms) {
-    const covered = RevitRoomFurniture.roomsCovered();
+  _useRevitFurniture(rooms, furniture) {
+    const covered = [];   // el mobiliario procedural ya trae la geometría completa de Revit: no se oculta nada
     const list = Array.isArray(rooms) ? rooms : (rooms?.rooms || []);
     const partial = new Set(ROOM_INSTANCES.filter((i) => i.partial).map((i) => i.id));
     const boxes = list.filter((r) => covered.includes(r.id) && r.bounds && !partial.has(r.id)).map((r) => r.bounds);
@@ -194,9 +194,11 @@ export class MasterplanScene {
       });
     }
     const target = this.interiorBuilder.group;
-    new RevitRoomFurniture(this.renderer).load().then((rf) => {
+    new RevitRoomFurniture(this.renderer).load({ furniture, rooms }).then((rf) => {
       this.revitFurniture = rf;
       target.add(rf.group);
+      // piezas procedurales que el GLB ya reemplaza en su posición exacta (índice = orden de creación en Piso2InteriorBuilder)
+      if (furn && rf.pieces?.replaced?.size) rf.pieces.replaced.forEach((i) => { if (furn.children[i]) furn.children[i].visible = false; });
       this.shadowsDirty = true;
     });
   }

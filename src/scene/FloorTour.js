@@ -513,7 +513,7 @@ export class FloorTour {
     if (on) {   // las luces del interior (y las del baño) se mueven a la habitación en uso: el número de luces no cambia
       const rf = this.app.revitFurniture, maps = rf?.focusRoom?.((r || this.current)?.id);
       if (maps && this.bathLights) { this.bathLights.matrix.copy(maps.doble); this.bathLights.matrixWorldNeedsUpdate = true; }
-      if (rf && this.bath && !this.bath.userData.bathInst) addBathInstances(this.bath, rf.instances.filter((i) => i.from === 'doble'));
+      if (rf && this.bath && !this.bath.userData.bathInst) addBathInstances(this.bath, [...rf.instances.filter((i) => i.from === 'doble'), ...(rf.pieces?.baths || [])]);
     }
     this.group.visible = on;
     const R = this.app.renderer;
@@ -821,6 +821,9 @@ export class FloorTour {
   // ------------------------------------------------------------- por frame
   update(dt = 0.016) {
     this.look?.update();
+    // el mobiliario del Piso 2 solo se dibuja en el recorrido, la planta y la vista cenital (en el exterior lo tapa la cubierta)
+    const furn = this.app.interiorBuilder?.categoryGroups?.furniture;
+    if (furn) { const show = this.mode !== 'off' || this.app._mode === 'top'; if (furn.visible !== show) furn.visible = show; }
     this._walk(dt);
     // el cielo raso solo aparece al cruzarlo (así el descenso no "choca" contra una losa blanca)
     if (this.ceiling && this.group.visible) this.ceiling.visible = this.app.camera.position.y < P2 + CEIL - 0.03;

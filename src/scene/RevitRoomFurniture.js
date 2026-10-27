@@ -58,19 +58,7 @@ const SHELL = { file: 'shell.glb', rooms: ['HAB-215', 'HAB-216'] };
 const UNITS = { doble: { x0: -3.9, x1: -0.28 }, sencilla: { x0: -0.28, x1: 3.1 } };
 export const ROOM_INSTANCES = [
   { id: 'HAB-217', from: 'doble', dx: 7.026, dz: -0.002 },
-  { id: 'HAB-218', from: 'sencilla', dx: 7.03, dz: 0.001 },
-  // ala diagonal: otra forma de planta → se alinean por ventana y lado del baño (giro ≈45°); solape con el polígono 93–99 %
-  // m = [a, b, c, d, tx, tz] con x' = a·x + b·z + tx ; z' = c·x + d·z + tz (coordenadas de mundo). Sin envolvente clonado: usan el procedural.
-  { id: 'HAB-219', from: 'doble', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.8578, 1.6979] },
-  { id: 'HAB-220', from: 'sencilla', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.9673, 1.8084] },
-  { id: 'HAB-221', from: 'doble', m: [0.69466, -0.71934, 0.71934, 0.69466, 29.94159, 6.84666] },
-  // suites y esquinas: el módulo de la sencilla (cama king, sofá, consola TV) encajado en la habitación; 'partial' = solo se oculta el
-  // mobiliario procedural dentro de la huella del módulo (la sala y el comedor de las suites se conservan). Solape 92–100 %.
-  { id: 'HAB-214', from: 'sencilla', partial: true, m: [-1, 0, 0, 1, -4.6863, 0.0633] },
-  { id: 'HAB-222', from: 'sencilla', partial: true, m: [-0.6691, 0.7431, 0.7431, 0.6691, 48.9839, 9.5411] },
-  { id: 'HAB-223', from: 'sencilla', partial: true, m: [0.2588, -0.9659, 0.9659, 0.2588, 24.6622, 6.232] },
-  { id: 'HAB-224', from: 'sencilla', partial: true, m: [0.866, -0.5, 0.5, 0.866, 29.2003, 16.5057] },
-  { id: 'HAB-225', from: 'sencilla', partial: true, m: [-0.4067, -0.9135, -0.9135, 0.4067, 31.8433, 17.1028] }
+  { id: 'HAB-218', from: 'sencilla', dx: 7.03, dz: 0.001 }
 ];
 
 const _tl = new THREE.TextureLoader();
@@ -180,6 +168,8 @@ function upgradeMaterial(src, aniso, isShell) {
       m.color.set(0xffffff); m.roughness = 1;
     }
   }
+  // canto del muro existente que queda a la vista donde termina el papel: tono del papel, no crema (marcaba una franja clara en las uniones)
+  if (/MAMPOSTERIA|DEFAULT WALL/.test(n)) m.color.set(0x8a8466);
   if (/VENTANA MARCO/.test(n)) { m.roughness = 0.5; }
   // el reflejo ambiental plano es lo que da el aspecto de cera: telas y maderas casi sin él; solo brillan metal, mármol y vidrio
   m.envMapIntensity = /CROMO|ORO|ESPEJO|MARMOL|VIDRIO/.test(n) ? 1.0 : (/TEJIDO|TAPIZ|LENCERIA|QUILT|CORTINA|TAPETE|ALFOMBRA/.test(n) ? 0.4 : 0.35);
@@ -264,7 +254,7 @@ export class RevitRoomFurniture {
     });
   }
 
-  async load() {
+  async load(opts = {}) {
     const [shell, ...rooms] = await Promise.all([this._load(SHELL.file), ...ROOM_LAYERS.map((L) => this._load(L.file))]);
     if (shell) { shell.name = 'Envolvente Revit'; this._prepare(shell, 'envolvente', true); this.shell = shell; this.group.add(shell); }
     rooms.forEach((g, i) => {
@@ -277,8 +267,12 @@ export class RevitRoomFurniture {
     });
     this._instantiate();
     this.group.updateMatrixWorld(true);
+    this.pieces = { replaced: new Set(), rooms: [], baths: [] };
     this._buildLights();
     this._buildMirrors();
+    // el mobiliario ahora se genera desde los datos de Revit (FurniturePrims): las capas del GLB solo aportan luces y espejos
+    Object.values(this.layers).forEach((l) => { l.visible = false; });
+    this.instances.forEach((i) => { i.group.visible = false; });
     return this;
   }
 
@@ -313,7 +307,8 @@ export class RevitRoomFurniture {
       const id4 = new THREE.Matrix4(), ctr = {};
       for (const t of ['doble', 'sencilla']) { const L = this.layers[t]; ctr[t] = L ? new THREE.Box3().setFromObject(L).getCenter(new THREE.Vector3()) : new THREE.Vector3(); }
       this._recs = [{ id: 'HAB-215', type: 'doble', m: id4, c: ctr.doble }, { id: 'HAB-216', type: 'sencilla', m: id4, c: ctr.sencilla },
-        ...this.instances.map((i) => ({ id: i.id, type: i.from, m: i.matrix, c: ctr[i.from].clone().applyMatrix4(i.matrix) }))];
+        ...this.instances.map((i) => ({ id: i.id, type: i.from, m: i.matrix, c: ctr[i.from].clone().applyMatrix4(i.matrix) })),
+        ...(this.pieces?.rooms || []).map((i) => ({ id: i.id, type: i.type, m: i.matrix, c: ctr[i.type].clone().applyMatrix4(i.matrix) }))];
     }
     const cur = this._recs.find((r) => r.id === id);
     const out = { doble: new THREE.Matrix4(), sencilla: new THREE.Matrix4() };

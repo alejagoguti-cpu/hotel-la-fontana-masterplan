@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { loopToShape, applyArchitecturalBrickUVs } from './HotelBuildingBuilder.js';
+import { buildItemMeshes } from './FurniturePrims.js';
+import { customModel } from './CatalogModels.js';
 
 const MM_TO_M = 0.001;
 
@@ -280,38 +282,37 @@ export class Piso2InteriorBuilder {
     ];
 
     let furnCounter = 0;
+    const matCache = new Map();
     for (const col of furnitureCollections) {
       for (const item of col.list) {
         const itemGroup = new THREE.Group();
-        const prims = item.prims || [];
-
-        for (const p of prims) {
-          if (!p.ring || p.ring.length < 3) continue;
-          const z0 = (p.z0 || 0) * MM_TO_M;
-          const z1 = (p.z1 || 450) * MM_TO_M;
-          const depth = Math.max(z1 - z0, 0.015);
-
-          const shape = loopToShape(p.ring);
-          const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false });
-          geo.rotateX(-Math.PI / 2);
-
-          const mat = this.materials.resolveFurnitureMaterial(p.mat);
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.y = PISO2_Y + z0;
-          mesh.castShadow = true;
-          mesh.receiveShadow = true;
-
+        // todos los tipos de primitivo de Revit (loft, revolución, varilla, perfil vertical…), no solo extrusiones planas
+        let meshes = []; const customMeshes = [];
+        // modelos 1:1 de la matriz de amoblamiento (CatalogModels) en la posición del Revit; el resto, la geometría de Revit
+        const baseCode = (item.code || '').replace(/\s*\[.*\]/, '');
+        const rev = (item.prims || []).find((p) => p.t === 'rev');
+        const custom = rev ? customModel(baseCode, this.materials) : null;
+        if (custom) {
+          custom.position.set(rev.c[0] * MM_TO_M, PISO2_Y, -rev.c[1] * MM_TO_M);
+          itemGroup.add(custom);   // el grupo conserva su posición; sus mallas se registran para el BIM más abajo
+          custom.traverse((o) => { if (o.isMesh) customMeshes.push(o); });
+        } else {
+          try { meshes = buildItemMeshes(item, this.materials, matCache); } catch (err) { console.warn('mobiliario', item.code, err); }
+        }
+        for (const mesh of meshes) {
           this.registerBimMesh(mesh, {
             elementId: 1150000 + (++furnCounter),
             category: 'Furniture (Mobiliario Fijo y Suelto)',
             familyAndType: `${item.code || 'HLF-MOB'} · ${item.desc || 'Mobiliario Hotel La Fontana'}`,
             level: 'PISO 2 (+3.00 m)',
-            dimensions: `Z0=${p.z0 || 0} mm → Z1=${p.z1 || 450} mm`,
-            material: `HLF-${p.mat || 'NOGAL'} (${col.groupName})`,
-            trustNote: 'Geometría 3D nativa generada según planos INT-605A / INT-608A'
+            dimensions: 'Geometría de Revit (loft / revolución / extrusión)',
+            material: `HLF-${mesh.material?.name || 'MOB'} (${col.groupName})`,
+            trustNote: 'Geometría real de las familias de Revit según planos INT-605A / INT-608A'
           });
-
           itemGroup.add(mesh);
+        }
+        for (const mesh of customMeshes) {
+          this.registerBimMesh(mesh, { elementId: 1150000 + (++furnCounter), category: 'Furniture (Mobiliario Fijo y Suelto)', familyAndType: `${item.code || 'HLF-MOB'} · modelo 1:1 de la matriz`, level: 'PISO 2 (+3.00 m)', dimensions: 'Medidas de la matriz de amoblamiento', material: `HLF-${mesh.material?.name || 'MOB'} (${col.groupName})`, trustNote: 'Modelo paramétrico 1:1 según matriz de amoblamiento V2' });
         }
         this.categoryGroups.furniture.add(itemGroup);
       }
