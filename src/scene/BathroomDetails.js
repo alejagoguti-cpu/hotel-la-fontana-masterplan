@@ -22,9 +22,6 @@ export const BATH_DETAILS = {
   }
 };
 
-// 217 = 215 desplazada (verificado con los polígonos de Revit)
-export const BATH_INSTANCES = { 'HAB-217': { from: 'HAB-215', dx: 7.026, dz: -0.002 } };
-
 function metricUV(geo, w, h, d) {
   const uv = geo.attributes.uv, sizes = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
   for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * sizes[f][0], uv.getY(i) * sizes[f][1]); }
@@ -102,13 +99,21 @@ export function buildBathroomDetails(lib, parent, rooms) {
       box(0.13, 0.55, 0.018, towelB, b.x + 0.075, b.y - 0.255, z - 0.012);
     }
   }
-  // habitaciones con la misma forma: copia del baño desplazada (las luces no se copian: se mueven con la habitación en uso)
-  for (const [id, inst] of Object.entries(BATH_INSTANCES)) {
-    if (!ids.has(id) || !subs[inst.from]) continue;
-    const copy = subs[inst.from].clone(true); copy.name = 'Baño ' + id; copy.position.set(inst.dx, 0, inst.dz); group.add(copy);
-  }
+  group.userData.subs = subs;
   if (lights.children.length) group.add(lights);
   group.userData.lights = lights;
   if (group.children.length) parent.add(group);
   return group;
+}
+
+/** Copia el baño de la 215 en las demás dobles (matriz de cada habitación clonada). Las luces no se copian: se mueven con la habitación. */
+export function addBathInstances(group, instances) {
+  const src = group.userData.subs?.['HAB-215'];
+  if (!src || group.userData.bathInst) return;
+  group.userData.bathInst = true;
+  for (const i of instances) {
+    const copy = src.clone(true); copy.name = 'Baño ' + i.id;
+    copy.matrixAutoUpdate = false; copy.matrix.copy(i.matrix); copy.matrixWorldNeedsUpdate = true;
+    group.add(copy);
+  }
 }

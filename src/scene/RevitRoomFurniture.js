@@ -58,7 +58,12 @@ const SHELL = { file: 'shell.glb', rooms: ['HAB-215', 'HAB-216'] };
 const UNITS = { doble: { x0: -3.9, x1: -0.28 }, sencilla: { x0: -0.28, x1: 3.1 } };
 export const ROOM_INSTANCES = [
   { id: 'HAB-217', from: 'doble', dx: 7.026, dz: -0.002 },
-  { id: 'HAB-218', from: 'sencilla', dx: 7.03, dz: 0.001 }
+  { id: 'HAB-218', from: 'sencilla', dx: 7.03, dz: 0.001 },
+  // ala diagonal: otra forma de planta → se alinean por ventana y lado del baño (giro ≈45°); solape con el polígono 93–99 %
+  // m = [a, b, c, d, tx, tz] con x' = a·x + b·z + tx ; z' = c·x + d·z + tz (coordenadas de mundo). Sin envolvente clonado: usan el procedural.
+  { id: 'HAB-219', from: 'doble', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.8578, 1.6979] },
+  { id: 'HAB-220', from: 'sencilla', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.9673, 1.8084] },
+  { id: 'HAB-221', from: 'doble', m: [0.69466, -0.71934, 0.71934, 0.69466, 29.94159, 6.84666] }
 ];
 
 const _tl = new THREE.TextureLoader();
@@ -205,6 +210,9 @@ export class RevitRoomFurniture {
   constructor(renderer) {
     this.group = new THREE.Group();
     this.group.name = 'MobiliarioRevit';
+    // el StaticBatcher no debe fusionar estas capas: las clonadas comparten material con las originales y sus posiciones están
+    // cuantizadas en 16 bits (al aplicar la matriz de mundo se truncaban a enteros y el mobiliario se destruía)
+    this.group.userData.dynamic = true;
     this.layers = {};
     this.lights = new THREE.Group(); this.lights.name = 'LucesInterior'; this.lights.visible = false;
     this.group.add(this.lights);
@@ -272,10 +280,13 @@ export class RevitRoomFurniture {
     for (const inst of ROOM_INSTANCES) {
       const src = this.layers[inst.from], u = UNITS[inst.from];
       if (!src) continue;
-      const g = src.clone(true); g.name = 'Capa ' + inst.id; g.position.set(inst.dx, 0, inst.dz);
+      const g = src.clone(true); g.name = 'Capa ' + inst.id;
+      const matrix = new THREE.Matrix4();
+      if (inst.m) { const [ma, mb, mc, md, tx, tz] = inst.m; matrix.set(ma, 0, mb, tx, 0, 1, 0, 0, mc, 0, md, tz, 0, 0, 0, 1); g.matrixAutoUpdate = false; g.matrix.copy(matrix); g.matrixWorldNeedsUpdate = true; }
+      else { matrix.makeTranslation(inst.dx, 0, inst.dz); g.position.set(inst.dx, 0, inst.dz); }
       g.traverse((o) => { if (o.isMesh && o.userData.bim) o.userData.bim = { ...o.userData.bim, trustNote: o.userData.bim.trustNote + ' · clonada para ' + inst.id }; });
-      this.group.add(g); this.instances.push({ ...inst, group: g });
-      if (this.shell) {
+      this.group.add(g); this.instances.push({ ...inst, group: g, matrix });
+      if (this.shell && !inst.m) {
         const sh = this.shell.clone(true); sh.name = 'Envolvente ' + inst.id; sh.position.set(inst.dx, 0, inst.dz);
         const x0 = u.x0 + inst.dx, x1 = u.x1 + inst.dx, z0 = -13.3 + inst.dz, z1 = -3.4 + inst.dz;
         const planes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -x0), new THREE.Plane(new THREE.Vector3(-1, 0, 0), x1), new THREE.Plane(new THREE.Vector3(0, 0, 1), -z0), new THREE.Plane(new THREE.Vector3(0, 0, -1), z1)];
@@ -288,15 +299,25 @@ export class RevitRoomFurniture {
     }
   }
 
-  /** Las luces se crean una sola vez (para la 215/216); al recorrer una habitación clonada se desplazan a ella. */
+  /** Las luces se crean una sola vez (por tipo de habitación, a partir de la 215 y la 216); al recorrer una habitación clonada,
+   *  cada grupo de luces se coloca (con su giro) en la habitación de su tipo más cercana. Devuelve la matriz de cada tipo. */
   focusRoom(id) {
-    const inst = this.instances.find((i) => i.id === id);
-    const dx = inst ? inst.dx : 0, dz = inst ? inst.dz : 0;
-    if (!this.lights) return [0, 0];
-    const moved = this.lights.position.x !== dx || this.lights.position.z !== dz;
-    this.lights.position.set(dx, 0, dz);
-    if (moved && this._renderer) this._renderer.shadowMap.needsUpdate = true;
-    return [dx, dz];
+    if (!this._recs) {
+      const id4 = new THREE.Matrix4(), ctr = {};
+      for (const t of ['doble', 'sencilla']) { const L = this.layers[t]; ctr[t] = L ? new THREE.Box3().setFromObject(L).getCenter(new THREE.Vector3()) : new THREE.Vector3(); }
+      this._recs = [{ id: 'HAB-215', type: 'doble', m: id4, c: ctr.doble }, { id: 'HAB-216', type: 'sencilla', m: id4, c: ctr.sencilla },
+        ...this.instances.map((i) => ({ id: i.id, type: i.from, m: i.matrix, c: ctr[i.from].clone().applyMatrix4(i.matrix) }))];
+    }
+    const cur = this._recs.find((r) => r.id === id);
+    const out = { doble: new THREE.Matrix4(), sencilla: new THREE.Matrix4() };
+    for (const t of ['doble', 'sencilla']) {
+      let best = this._recs.find((r) => r.type === t);
+      if (cur) best = this._recs.filter((r) => r.type === t).reduce((p, q) => (q.c.distanceTo(cur.c) < p.c.distanceTo(cur.c) ? q : p));
+      out[t].copy(best.m);
+      const g = this.lightGroups?.[t];
+      if (g && !g.matrix.equals(best.m)) { g.matrix.copy(best.m); g.matrixWorldNeedsUpdate = true; if (this._renderer) this._renderer.shadowMap.needsUpdate = true; }
+    }
+    return out;
   }
 
   /** Agrupa los vértices de una malla en islas (celdas de 0.2 m conectadas) → cajas en coordenadas de mundo. */
@@ -331,11 +352,16 @@ export class RevitRoomFurniture {
   _buildLights() {
     const c = new THREE.Vector3(), s = new THREE.Vector3();
     const P2 = 3.02;
-    let shadowSpots = 0, nSpot = 0, nPoint = 0;   // presupuesto de luces: cada luz se evalúa en cada píxel de cada material
+    let shadowSpots = 0;
+    this.lightGroups = {};
+    for (const type of ['doble', 'sencilla']) {
+    const layer = this.layers[type]; if (!layer) continue;
+    const grp = new THREE.Group(); grp.name = 'Luces ' + type; grp.matrixAutoUpdate = false; this.lights.add(grp); this.lightGroups[type] = grp;
+    let nSpot = 0, nPoint = 0;   // presupuesto por tipo: cada luz se evalúa en cada píxel de cada material
     const emitters = [];
-    Object.values(this.layers).forEach((layer) => layer.traverse((o) => {
+    layer.traverse((o) => {
       if (o.isMesh && /LED|XAL_DIFFUSE|PANTALLA LAMPARA/.test(o.material.name.toUpperCase())) emitters.push(o);
-    }));
+    });
     emitters.forEach((o) => this._islands(o).forEach((box) => {
       box.getCenter(c); box.getSize(s);
       const long = Math.max(s.x, s.z);
@@ -346,9 +372,9 @@ export class RevitRoomFurniture {
         up.position.copy(c); up.rotation.set(Math.PI / 2, alongX ? 0 : Math.PI / 2, 0, 'YXZ');
         const dn = new THREE.RectAreaLight(0xffc98a, 0.8, long, 0.1);
         dn.position.copy(c); dn.rotation.set(-Math.PI / 2, alongX ? 0 : Math.PI / 2, 0, 'YXZ');
-        this.lights.add(up, dn);
+        grp.add(up, dn);
       } else if (c.y > P2 + 2.0 && long < 0.35) {
-        if (nSpot >= 4) return; nSpot++;
+        if (nSpot >= 2) return; nSpot++;
         // downlight empotrado: cono cálido de borde suave
         const sp = new THREE.SpotLight(0xffd3a0, 2.3, 5, Math.PI / 3.4, 1.0, 2);
         sp.position.set(c.x, c.y - 0.03, c.z);
@@ -357,16 +383,18 @@ export class RevitRoomFurniture {
           sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.radius = 8;
           sp.shadow.bias = -0.0005; sp.shadow.normalBias = 0.03; shadowSpots++;
         }
-        this.lights.add(sp, sp.target);
+        grp.add(sp, sp.target);
       } else if (long < 0.6) {
-        if (!/PANTALLA/.test(o.material.name.toUpperCase()) || nPoint >= 3) return; nPoint++;
+        if (!/PANTALLA/.test(o.material.name.toUpperCase()) || nPoint >= 2) return; nPoint++;
         // lámpara de mesa, aplique o colgante: luz puntual cálida y tenue
         const pl = new THREE.PointLight(0xffc583, 0.35, 2.0, 2);
         pl.position.copy(c);
-        this.lights.add(pl);
+        grp.add(pl);
       }
     }));
-    console.info(`[interior] luces creadas: ${this.lights.children.length}`);
+    }
+    let nl = 0; this.lights.traverse((o) => { if (o.isLight) nl++; });
+    console.info(`[interior] luces creadas: ${nl}`);
   }
 
   /** Espejos reales: cada espejo de Revit recibe un plano reflectante (Reflector) en su cara hacia la habitación.
@@ -375,8 +403,9 @@ export class RevitRoomFurniture {
     this.mirrors = new THREE.Group(); this.mirrors.name = 'Espejos'; this.mirrors.visible = false;
     const c = new THREE.Vector3(), s = new THREE.Vector3(), lc = new THREE.Vector3();
     const res = 512;
-    const centers = [...Object.values(this.layers), ...this.instances.map((i) => i.group)].map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
-    [...Object.values(this.layers), ...this.instances.map((i) => i.group), ...(this.shell ? [this.shell] : [])].forEach((layer) => {
+    const flat = this.instances.filter((i) => !i.m).map((i) => i.group);   // los espejos son planos alineados a los ejes: se omiten en las giradas
+    const centers = [...Object.values(this.layers), ...flat].map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
+    [...Object.values(this.layers), ...flat, ...(this.shell ? [this.shell] : [])].forEach((layer) => {
       const mirrors = [];
       layer.traverse((o) => { if (o.isMesh && /ESPEJO/.test((o.material.name || '').toUpperCase())) mirrors.push(o); });
       mirrors.forEach((o) => this._islands(o, 0.3).forEach((box) => {

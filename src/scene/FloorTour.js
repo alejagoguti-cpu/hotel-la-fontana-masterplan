@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { store } from '../state/store.js';
 import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
 import { RoomDoors } from './RoomDoors.js';
-import { buildBathroomDetails } from './BathroomDetails.js';
+import { buildBathroomDetails, addBathInstances } from './BathroomDetails.js';
 
 /**
  * FloorTour — Experiencia "Piso 2" tipo sitio de desarrolladora:
@@ -232,7 +232,7 @@ export class FloorTour {
     }
     this._buildCornices();
     try { this.doors = new RoomDoors(this.app, this); this.group.add(this.doors.build(this.app.materials, this.rooms)); this.doors.attach(); } catch (e) { console.warn('puertas', e); }
-    try { this.bathLights = buildBathroomDetails(this.app.materials, this.group, this.rooms).userData.lights; } catch (e) { console.warn('baño', e); }
+    try { this.bath = buildBathroomDetails(this.app.materials, this.group, this.rooms); this.bathLights = this.bath.userData.lights; if (this.bathLights) this.bathLights.matrixAutoUpdate = false; } catch (e) { console.warn('baño', e); }
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
@@ -511,8 +511,9 @@ export class FloorTour {
   _showDressing(on, r = null) {
     this._setEnvironment(!on);
     if (on) {   // las luces del interior (y las del baño) se mueven a la habitación en uso: el número de luces no cambia
-      const off = this.app.revitFurniture?.focusRoom?.((r || this.current)?.id) || [0, 0];
-      this.bathLights?.position.set(off[0], 0, off[1]);
+      const rf = this.app.revitFurniture, maps = rf?.focusRoom?.((r || this.current)?.id);
+      if (maps && this.bathLights) { this.bathLights.matrix.copy(maps.doble); this.bathLights.matrixWorldNeedsUpdate = true; }
+      if (rf && this.bath && !this.bath.userData.bathInst) addBathInstances(this.bath, rf.instances.filter((i) => i.from === 'doble'));
     }
     this.group.visible = on;
     const R = this.app.renderer;
