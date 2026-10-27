@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { store } from '../state/store.js';
 import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
-import { buildRoomDoors } from './RoomDoors.js';
+import { RoomDoors } from './RoomDoors.js';
 
 /**
  * FloorTour — Experiencia "Piso 2" tipo sitio de desarrolladora:
@@ -230,7 +230,7 @@ export class FloorTour {
       this.group.add(this.ceiling);
     }
     this._buildCornices();
-    try { buildRoomDoors(this.app.materials, this.group, this.rooms); } catch (e) { console.warn('puertas', e); }
+    try { this.doors = new RoomDoors(this.app, this); this.group.add(this.doors.build(this.app.materials, this.rooms)); this.doors.attach(); } catch (e) { console.warn('puertas', e); }
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
@@ -743,6 +743,8 @@ export class FloorTour {
 
   _blocked(x, z) {
     if (this.slabPoly && !pointInPoly(x, z, this.slabPoly)) return true;
+    if (this.doors?.passable(x, z)) return false;   // vano de una puerta abierta
+    if (this.doors?.blocks(x, z)) return true;      // hoja cerrada
     for (const s of this.wallSegs) {
       const vx = s.bx - s.ax, vz = s.bz - s.az, L = vx * vx + vz * vz || 1e-9;
       const t = Math.max(0, Math.min(1, ((x - s.ax) * vx + (z - s.az) * vz) / L));
