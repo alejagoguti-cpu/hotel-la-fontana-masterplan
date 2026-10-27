@@ -69,8 +69,84 @@ function mesaNoche(lib) {
   return g;
 }
 
+const std = (lib, key, params) => cached(lib, key, () => new THREE.MeshStandardMaterial(params));
+const add = (g, geo, mat, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
+
+/** M-01 Mesa de centro · ø 80 × H 75 — foto: tapa redonda delgada de piedra gris con vetas blancas sobre base cónica marrón. */
+function mesaCentro(lib) {
+  const g = new THREE.Group(); g.name = 'M-01 Mesa de centro';
+  const stone = cached(lib, 'phantom', () => lib.realMaterial('phantom_grey', 0.8, { roughness: 0.28, normalScale: 0.05, envMapIntensity: 0.9 }));
+  const base = std(lib, 'cono_marron', { color: 0x4a3426, roughness: 0.55, metalness: 0.15 });
+  const R = 0.40, th = 0.03, H = 0.75;
+  add(g, lathe(roundedProfile(R, 0, th, 0.006), 96, 2 * Math.PI * R), stone, 0, H - th);
+  add(g, lathe([[0, 0], [0.17, 0], [0.17, 0.004], [0.06, H - th - 0.004], [0.06, H - th], [0, H - th]], 64, 1.1), base);
+  return g;
+}
+
+/** MA-02 Mesa auxiliar · ø 40 × H 50 — foto: tapa redonda de nogal, patas de platina negra y travesaño en X. */
+function mesaAuxiliar(lib) {
+  const g = new THREE.Group(); g.name = 'MA-02 Mesa auxiliar';
+  const wood = cached(lib, 'nogal', () => lib.realMaterial('sikuani', 0.6, { roughness: 0.55, normalScale: 0.05 }));
+  const steel = std(lib, 'acero_negro', { color: 0x16130f, roughness: 0.5, metalness: 0.4 });
+  const R = 0.20, H = 0.50, th = 0.025;
+  add(g, lathe(roundedProfile(R, 0, th, 0.004), 64, 2 * Math.PI * R), wood, 0, H - th);
+  const legH = H - th, w = 0.02, t = 0.006;
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4, x = Math.sin(a) * (R - 0.04), z = Math.cos(a) * (R - 0.04);
+    const leg = add(g, new THREE.BoxGeometry(w, legH, t), steel, x, legH / 2, z); leg.rotation.y = a;
+  }
+  for (let i = 0; i < 2; i++) { const bar = add(g, new THREE.BoxGeometry((R - 0.04) * 2 * 1.41, w, t), steel, 0, 0.14, 0); bar.rotation.y = i * Math.PI / 2 + Math.PI / 4; }
+  return g;
+}
+
+/** TA-01 Tapete · ø 250 — foto: anillos concéntricos de trazos radiales (beige / marrón / crema). */
+function tapeteRedondo(lib) {
+  const g = new THREE.Group(); g.name = 'TA-01 Tapete';
+  const mat = cached(lib, 'anillos', () => lib.realMaterial('tapete_anillos', 2.5, { roughness: 0.95, normalScale: 0.15 }));
+  const geo = new THREE.CircleGeometry(1.25, 96); geo.rotateX(-Math.PI / 2);
+  const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * 2.5, uv.getY(i) * 2.5);
+  add(g, geo, mat, 0, 0.012);
+  const edge = new THREE.CylinderGeometry(1.25, 1.25, 0.012, 96, 1, true);
+  add(g, edge, mat, 0, 0.006);
+  return g;
+}
+
+/** LP-04 Lámpara de escritorio · base ø 14 × H 45 — foto: latón cepillado; base circular plana, fuste delgado que se curva en arco y cabeza cilíndrica orientada hacia abajo. */
+function lamparaMesa(lib) {
+  const g = new THREE.Group(); g.name = 'LP-04 Lámpara de escritorio';
+  const brass = std(lib, 'laton', { color: 0xb9a36a, roughness: 0.38, metalness: 0.85 });
+  const lamp = std(lib, 'laton_luz', { color: 0xb9a36a, roughness: 0.38, metalness: 0.85, emissive: 0xffe2b0, emissiveIntensity: 0.15 });
+  add(g, lathe([[0, 0], [0.07, 0], [0.07, 0.012], [0, 0.012]], 48, 0.44), brass, 0.0, 0);
+  const curve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(0.04, 0.012, 0), new THREE.Vector3(0.04, 0.22, 0), new THREE.Vector3(0.045, 0.36, 0),
+    new THREE.Vector3(0.0, 0.43, 0), new THREE.Vector3(-0.06, 0.44, 0), new THREE.Vector3(-0.11, 0.425, 0)
+  ]);
+  add(g, new THREE.TubeGeometry(curve, 48, 0.009, 12), brass);
+  const head = add(g, new THREE.CylinderGeometry(0.016, 0.016, 0.075, 24), lamp, -0.115, 0.39, 0);
+  head.rotation.z = 0;
+  return g;
+}
+
+/** LP-02 Lámpara de piso · ø 23 × H 135 — foto: arco negro con cabeza cónica. */
+function lamparaPiso(lib) {
+  const g = new THREE.Group(); g.name = 'LP-02 Lámpara de piso';
+  const black = std(lib, 'negro_mate', { color: 0x14120f, roughness: 0.5, metalness: 0.5 });
+  const glow = std(lib, 'cabeza_luz', { color: 0x14120f, roughness: 0.5, metalness: 0.5, emissive: 0xffd9a0, emissiveIntensity: 0.25 });
+  add(g, new THREE.CylinderGeometry(0.115, 0.125, 0.02, 48), black, 0, 0.01);
+  const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-0.1, 0.02, 0), new THREE.Vector3(-0.1, 1.45, 0), new THREE.Vector3(0.2, 1.2, 0));
+  add(g, new THREE.TubeGeometry(curve, 40, 0.01, 10), black);
+  const head = add(g, lathe([[0.0, 0], [0.04, 0.0], [0.115, 0.13], [0.0, 0.13]], 40, 0.7), glow, 0.2, 1.12);
+  head.rotation.x = Math.PI; head.position.y = 1.25;
+  return g;
+}
+
 export const CATALOG_MODELS = {
-  'MA-01': { build: mesaNoche, dims: 'ø 40 cm × H 60 cm' }
+  'MA-01': { build: mesaNoche, dims: 'ø 40 cm × H 60 cm' },
+  'M-01': { build: mesaCentro, dims: 'ø 80 cm × H 75 cm' },
+  'MA-02': { build: mesaAuxiliar, dims: 'ø 40 cm × H 50 cm' },
+  'TA-01': { build: tapeteRedondo, dims: 'ø 250 cm' },
+  'LP-04': { build: lamparaMesa, dims: 'base ø 14 cm × H 45 cm' },
+  'LP-02': { build: lamparaPiso, dims: 'ø 23 cm × H 135 cm' }
 };
 
 export function customModel(code, lib) {
