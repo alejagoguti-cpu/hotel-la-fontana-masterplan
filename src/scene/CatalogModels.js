@@ -1,13 +1,13 @@
 import * as THREE from 'three';
 
 /**
- * CatalogModels — modelos paramétricos 1:1 de la matriz de amoblamiento (medidas y materiales EXACTOS de la especificación).
- * Cada modelo se dibuja centrado en el origen, apoyado en y = 0, en metros. Sirven tanto al catálogo como al recorrido
- * (el recorrido los coloca en la posición del Revit). Un modelo bien hecho se replica con el mismo método para el resto de la matriz.
+ * CatalogModels — modelos paramétricos 1:1 de la matriz de amoblamiento. REGLA: nada se inventa. Cada modelo copia la FOTO de
+ * referencia de la matriz (forma, color, acabado) con las MEDIDAS de la columna "Medidas"; si la foto y el texto de la
+ * especificación no coinciden, manda la foto (indicado por el cliente).
+ * Cada modelo se dibuja centrado en el origen, apoyado en y = 0, en metros, con el "frente" hacia +z.
  *
- * MA-01 Mesa de noche · Studio Inc o similar · ø 40 cm × H 60 cm
- *   Base inferior tapizada en cuero (Dekor Group 335x4680) sobre lámina de espuma de alta densidad + superficie en piedra
- *   sinterizada Altea Phantom Dark Grey.
+ * MA-01 Mesa de noche · ø 40 cm × H 60 cm — foto: cilindro tapizado en cuero marrón terracota mate con una ranura vertical al frente
+ *   (dos paños que se unen), zócalo hundido en sombra y tapa delgada de piedra BLANCA.
  */
 const matCache = new WeakMap();
 const cached = (lib, key, make) => { let m = matCache.get(lib); if (!m) matCache.set(lib, (m = new Map())); if (!m.has(key)) m.set(key, make()); return m.get(key); };
@@ -34,34 +34,38 @@ function roundedProfile(r, y0, y1, e, steps = 5) {
 
 function mesaNoche(lib) {
   const g = new THREE.Group(); g.name = 'MA-01 Mesa de noche';
-  const R = 0.20, H = 0.60, plinth = 0.03, slab = 0.02;
-  // cuero cognac con grano, brillo satinado
-  const leather = cached(lib, 'cuero', () => {
-    const m = lib.realMaterial('cuero_cognac', 0.35, { roughness: 0.62, normalScale: 0.7, envMapIntensity: 0.6 });
-    return m;
-  });
-  const stone = cached(lib, 'phantom', () => {
-    const m = lib.realMaterial('piedra_phantom', 0.6, { roughness: 0.22, normalScale: 0.35, envMapIntensity: 1.1 });
-    return m;
-  });
-  const steel = cached(lib, 'acero', () => new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.5, metalness: 0.6 }));
+  const R = 0.20, H = 0.60, plinth = 0.025, slab = 0.025;
+  // cuero marrón terracota mate (como en la foto): grano muy leve
+  const leather = cached(lib, 'cuero', () => lib.realMaterial('cuero_cognac', 0.35, { roughness: 0.82, normalScale: 0.1, envMapIntensity: 0.45 }));
+  // tapa blanca (como en la foto)
+  const top = cached(lib, 'tapa', () => new THREE.MeshStandardMaterial({ color: 0xece8df, roughness: 0.32, metalness: 0, envMapIntensity: 0.9 }));
+  // zócalo hundido: en la foto se lee como una sombra oscura
+  const shadow = cached(lib, 'zocalo', () => new THREE.MeshStandardMaterial({ color: 0x2a1c14, roughness: 0.9 }));
   const mk = (geo, mat, y = 0) => { const m = new THREE.Mesh(geo, mat); m.position.y = y; m.castShadow = true; m.receiveShadow = true; g.add(m); return m; };
-  // zócalo retraído en acero negro (el cuerpo parece flotar)
-  mk(lathe(roundedProfile(R - 0.03, 0, plinth, 0.004), 48, 2 * Math.PI * R), steel);
-  // cuerpo tapizado en cuero sobre espuma: leve abombado y aristas suaves
-  const bodyH = H - plinth - slab;
-  const prof = []; const e = 0.012, rr = R;
-  prof.push([0, plinth]);
-  for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI / 2; prof.push([rr - e + Math.sin(a) * e, plinth + e - Math.cos(a) * e]); }
-  const mid = 12; for (let i = 1; i < mid; i++) { const t = i / mid; prof.push([rr + Math.sin(t * Math.PI) * 0.0025, plinth + e + (bodyH - 2 * e) * t]); }   // abombado ≈2.5 mm
-  for (let i = 0; i <= 6; i++) { const a = (i / 6) * Math.PI / 2; prof.push([rr - e + Math.cos(a) * e, plinth + bodyH - e + Math.sin(a) * e]); }
+
+  mk(lathe(roundedProfile(R - 0.025, 0, plinth, 0.003), 48, 2 * Math.PI * R), shadow);
+
+  // cuerpo: cilindro tapizado con una ranura vertical al frente (+z). La ranura se hunde con perfil suave (v) y recorre toda la altura.
+  const bodyH = H - plinth - slab, e = 0.01, seg = 96;
+  const prof = [[0, plinth]];
+  for (let i = 0; i <= 5; i++) { const a = (i / 5) * Math.PI / 2; prof.push([R - e + Math.sin(a) * e, plinth + e - Math.cos(a) * e]); }
+  for (let i = 1; i < 14; i++) prof.push([R, plinth + e + (bodyH - 2 * e) * (i / 14)]);
+  for (let i = 0; i <= 5; i++) { const a = (i / 5) * Math.PI / 2; prof.push([R - e + Math.cos(a) * e, plinth + bodyH - e + Math.sin(a) * e]); }
   prof.push([0, plinth + bodyH]);
-  mk(lathe(prof, 64, 2 * Math.PI * R), leather);
-  // costura vertical (junta de la tapicería)
-  const seam = new THREE.Mesh(new THREE.CylinderGeometry(0.0016, 0.0016, bodyH - 0.03, 6), new THREE.MeshStandardMaterial({ color: 0x3b261a, roughness: 0.8 }));
-  seam.position.set(R * Math.cos(0.55) + 0.0012, plinth + bodyH / 2, R * Math.sin(0.55)); seam.castShadow = false; g.add(seam);
-  // tapa de piedra sinterizada pulida con canto biselado
-  mk(lathe(roundedProfile(R, 0, slab, 0.004), 64, 2 * Math.PI * R), stone, H - slab);
+  const body = lathe(prof, seg, 2 * Math.PI * R);
+  const pos = body.attributes.position, depth = 0.014, halfW = 0.028;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i), r = Math.hypot(x, z);
+    if (r < R * 0.9) continue;                       // solo el manto, no las tapas
+    const ang = Math.atan2(x, z);                    // 0 = frente (+z)
+    const d = Math.abs(ang) * r;                     // distancia en arco a la ranura
+    if (d < halfW) { const k = Math.pow(1 - d / halfW, 1.6) * depth; pos.setXYZ(i, x * (1 - k / r), pos.getY(i), z * (1 - k / r)); }
+  }
+  pos.needsUpdate = true; body.computeVertexNormals();
+  mk(body, leather);
+
+  // tapa delgada blanca con canto suavizado y un pequeño voladizo
+  mk(lathe(roundedProfile(R, 0, slab, 0.006), 96, 2 * Math.PI * R), top, H - slab);
   return g;
 }
 

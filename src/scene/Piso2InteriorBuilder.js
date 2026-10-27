@@ -283,6 +283,14 @@ export class Piso2InteriorBuilder {
 
     let furnCounter = 0;
     const matCache = new Map();
+    // dirección "pie de cama" de cada habitación (del cabecero ME-07 hacia la cama): orienta las piezas con frente (p. ej. la ranura de la mesa de noche)
+    const planCenter = (it) => { const p = (it.prims || []).find((q) => q.t === 'ext' && q.ring) || null; if (p) { const n = p.ring.length; return [p.ring.reduce((s, q) => s + q[0], 0) / n * MM_TO_M, -p.ring.reduce((s, q) => s + q[1], 0) / n * MM_TO_M]; } const r = (it.prims || []).find((q) => q.t === 'rev'); return r ? [r.c[0] * MM_TO_M, -r.c[1] * MM_TO_M] : null; };
+    const footDir = new Map();
+    for (const col of furnitureCollections) {
+      const by = new Map();
+      for (const it of col.list) { const k = (/\[(\w+)\]/.exec(it.code || '') || [])[1] || '-'; if (!by.has(k)) by.set(k, {}); const o = by.get(k), c0 = /^(CAMA|ME-07)/.test(it.code) ? it.code.slice(0, 6).trim() : null; if (/^CAMA/.test(it.code) && !o.cama) o.cama = planCenter(it); if (/^ME-07/.test(it.code) && !o.head) o.head = planCenter(it); }
+      for (const [k, o] of by) if (o.cama && o.head) { const dx = o.cama[0] - o.head[0], dz = o.cama[1] - o.head[1]; footDir.set(col.groupName + '|' + k, Math.atan2(dx, dz)); }
+    }
     for (const col of furnitureCollections) {
       for (const item of col.list) {
         const itemGroup = new THREE.Group();
@@ -294,6 +302,8 @@ export class Piso2InteriorBuilder {
         const custom = rev ? customModel(baseCode, this.materials) : null;
         if (custom) {
           custom.position.set(rev.c[0] * MM_TO_M, PISO2_Y, -rev.c[1] * MM_TO_M);
+          const yaw = footDir.get(col.groupName + '|' + ((/\[(\w+)\]/.exec(item.code || '') || [])[1] || '-'));
+          if (yaw !== undefined) custom.rotation.y = yaw;
           itemGroup.add(custom);   // el grupo conserva su posición; sus mallas se registran para el BIM más abajo
           custom.traverse((o) => { if (o.isMesh) customMeshes.push(o); });
         } else {
