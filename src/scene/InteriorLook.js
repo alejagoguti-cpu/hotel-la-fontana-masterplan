@@ -102,13 +102,15 @@ export class InteriorLook {
         bloom: fx?.bloom ? [fx.bloom.strength, fx.bloom.radius, fx.bloom.threshold] : null,
         grade: fx?.grade ? { c: fx.grade.uniforms.uContrast.value, s: fx.grade.uniforms.uSaturation.value, v: fx.grade.uniforms.uVignette.value, w: fx.grade.uniforms.uWarm.value.clone() } : null
       };
-      if (app.hemiLight) app.hemiLight.intensity = this._saved.hemi * 0.35;
+      if (app.hemiLight) app.hemiLight.intensity = this._saved.hemi * 0.3;   // menos relleno plano: que mande la luz de las lámparas
       if (fx?.bloom) { fx.bloom.strength = 0.28; fx.bloom.radius = 0.5; fx.bloom.threshold = 0.93; }
       if (fx?.grade) {
         const u = fx.grade.uniforms;
         u.uContrast.value = 1.05; u.uSaturation.value = 1.06; u.uVignette.value = 0.22; u.uWarm.value.set(1.04, 1.0, 0.95);
       }
-      if (fx?.ao) { fx.ao.enabled = !fx.low; fx.ao.blendIntensity = 0.8; fx.ao.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.2, thickness: 0.7, scale: 1.1 }); }
+      // la oclusión ambiental va siempre encendida dentro de la habitación (también en GPUs integradas, con menos muestras):
+      // sin ella las telas y la madera "flotan" y se ven de cera
+      if (fx?.ao) { fx.ao.enabled = true; fx.ao.blendIntensity = 0.75; fx.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.3, thickness: 0.8, scale: 1.1, samples: fx.low ? 8 : 14 }); }
     }
     app.scene.environment = this.roomEnv;
     // ventanas de esta habitación → luz de área orientada hacia adentro

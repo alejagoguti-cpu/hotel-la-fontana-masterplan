@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /**
  * RevitRoomFurniture — habitaciones "de render" con geometría REAL de Hotel_la_fontana_contexto.rvt:
@@ -20,7 +21,7 @@ const BASE = './assets/models/furniture/';
 const TEX = {
   // mobiliario
   'HLF-MOB TAPIZ TRAILBLAZER 32 MARBLE': ['real/boucle_taupe', 0.45, 0xffffff, 1, 1.0],
-  'HLF-MOB LENCERIA BLANCA': ['real/cama_blanca', 0.5, 0xffffff, 1, 0.35],
+  'HLF-MOB LENCERIA BLANCA': ['real/cama_blanca', 0.7, 0xffffff, 1, 0.45],
   'HLF-MOB CUERO CAMEL': ['real/cuero_camel', 0.5, 0x6a4c3a, 0.5, 0.5],
   'HLF-MOB MELAMINA SIKUANI': ['real/nogal', 1.4, 0xffffff, 0.9, 0.6],
   'HLF-MOB QUILT OSCURO': ['hlf_quilt_oscuro.png', 0.45, 0xffffff, 0.8, 1.6],
@@ -130,7 +131,7 @@ function upgradeMaterial(src, aniso, isShell) {
     m.sheen = 0.3; m.sheenRoughness = 0.8; m.sheenColor = new THREE.Color(0xf3e8d8);
   }
   // sábanas y edredón: blanco cálido mate; el brillo de tela (sheen) fuerte los "quemaba" en las almohadas
-  if (/LENCERIA/.test(n)) { m.sheen = 0.12; m.sheenRoughness = 0.9; m.sheenColor = new THREE.Color(0xf3ece0); m.roughness = 1; m.color.set(0xf4efe6); }
+  if (/LENCERIA/.test(n)) { m.sheen = 0.06; m.sheenRoughness = 0.9; m.sheenColor = new THREE.Color(0xf3ece0); m.roughness = 1; m.color.set(0xffffff); }
   if (/CUERO/.test(n)) { m.clearcoat = 0.25; m.clearcoatRoughness = 0.45; }
   if (/PIEDRA CLARA/.test(n)) { m.map = null; m.color.set(0xd9d3c8); m.roughness = 0.45; m.clearcoat = 0.3; m.clearcoatRoughness = 0.3; }
   if (/MELAMINA|NOGAL|SIKUANI/.test(n)) { m.clearcoat = 0.08; m.clearcoatRoughness = 0.55; } // nogal satinado, poro abierto
@@ -157,10 +158,36 @@ function upgradeMaterial(src, aniso, isShell) {
     }
   }
   if (/VENTANA MARCO/.test(n)) { m.roughness = 0.5; }
-  m.envMapIntensity = /CROMO|ORO|ESPEJO|MARMOL|VIDRIO/.test(n) ? 1.0 : 0.45;
+  // el reflejo ambiental plano es lo que da el aspecto de cera: telas y maderas casi sin él; solo brillan metal, mármol y vidrio
+  m.envMapIntensity = /CROMO|ORO|ESPEJO|MARMOL|VIDRIO/.test(n) ? 1.0 : (/TEJIDO|TAPIZ|LENCERIA|QUILT|CORTINA|TAPETE|ALFOMBRA/.test(n) ? 0.4 : 0.35);
   if (isShell) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2; }
   m.needsUpdate = true;
   return m;
+}
+
+/** Los GLB de Revit salen SIN UV: sin esto cada textura (nogal, tela, piso, tapete…) se reduce a un solo texel y todo
+ *  se ve de un color plano, "de cera". Proyección en caja a escala real: 1 unidad de UV = 0.6 m (como espera TEX).
+ *  Caras horizontales → (x, z); caras verticales → (horizontal, altura), con la veta vertical. */
+function boxProjectUV(o) {
+  let g = o.geometry;
+  if (!g || g.attributes.uv) return;
+  if (g.index) g = g.toNonIndexed();
+  const pos = g.attributes.position, n = pos.count, uv = new Float32Array(n * 2);
+  const m = o.matrixWorld, P = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()], e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+  const S = 1 / 0.6;
+  for (let i = 0; i + 2 < n; i += 3) {
+    for (let k = 0; k < 3; k++) P[k].fromBufferAttribute(pos, i + k).applyMatrix4(m);
+    e1.subVectors(P[1], P[0]); e2.subVectors(P[2], P[0]); e1.cross(e2);
+    const ax = Math.abs(e1.x), ay = Math.abs(e1.y), az = Math.abs(e1.z);
+    for (let k = 0; k < 3; k++) {
+      const p = P[k];
+      let u, v;
+      if (ay >= ax && ay >= az) { u = p.x; v = p.z; } else if (ax >= az) { u = p.z; v = p.y; } else { u = p.x; v = p.y; }
+      uv[(i + k) * 2] = u * S; uv[(i + k) * 2 + 1] = v * S;
+    }
+  }
+  g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  o.geometry = g;
 }
 
 export class RevitRoomFurniture {
@@ -181,9 +208,18 @@ export class RevitRoomFurniture {
   }
 
   _prepare(root, label, isShell) {
+    root.updateMatrixWorld(true);
     root.traverse((o) => {
       if (!o.isMesh) return;
       o.material = upgradeMaterial(o.material, this.aniso, isShell);
+      // telas y almohadas: normales suaves (el export de Revit las trae facetadas, como plástico duro)
+      if (/LENCERIA|TEJIDO|TAPIZ|QUILT/.test(o.material.name.toUpperCase()) && o.geometry.index) {
+        try {
+          const g = o.geometry; g.deleteAttribute('normal');
+          o.geometry = mergeVertices(g, 0.5); o.geometry.computeVertexNormals();
+        } catch (e) { /* se conserva la geometría original */ }
+      }
+      boxProjectUV(o);
       o.castShadow = !o.material.transparent && !/LED/.test(o.material.name.toUpperCase());
       o.receiveShadow = true;
       o.userData.bim = {
