@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyPBR, SURFACES } from './PBRSurfaces.js';
 
 /**
  * SiteDetails — Detalles del conjunto Hotel La Fontana según las fotos de sitio:
@@ -74,13 +75,9 @@ export class SiteDetails {
   applySidewalkPaving() {
     const m = this.materials.get('SIDEWALK_PAVING');
     if (!m) return;
-    const t = this.walkTex.clone();
-    t.needsUpdate = true;
-    t.repeat.set(1 / 2.0, 1 / 2.0);  // textura = 2 m x 2 m
-    m.map = m.bumpMap = t; m.bumpScale = 0.045;
-    m.color.setHex(0xffffff);
-    m.roughness = 0.85;
-    m.needsUpdate = true;
+    // adoquín de arcilla real (fotogrametría CC0): color, relieve de juntas y rugosidad
+    m.bumpMap = null;
+    applyPBR(m, SURFACES.RED_PAVERS, { metersPerTile: 1.8, tint: 0xf2e6e0, normalScale: 1.3, rough: true, macro: { macroScale: 0.06, strength: 0.22 } });
   }
 
   /** Plano de plazoleta con adoquín de arcilla (w x d metros). */
@@ -100,10 +97,8 @@ export class SiteDetails {
 
   /** Plazoleta con adoquín de arcilla sobre un polígono [x,z] (llega hasta el andén). */
   buildCourtPavingPoly(pts, group) {
-    const t = this.courtTex.clone();
-    t.needsUpdate = true;
-    t.repeat.set(1 / 3.0, 1 / 3.0);
-    const mat = new THREE.MeshStandardMaterial({ map: t, bumpMap: t, bumpScale: 0.045, roughness: 0.91, metalness: 0.0 });
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.9, metalness: 0.0 });
+    applyPBR(mat, SURFACES.HERRINGBONE, { metersPerTile: 2.2, tint: 0xffffff, normalScale: 1.25, rough: true, macro: { macroScale: 0.05, strength: 0.25 } });
     const shape = new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z)));
     const geo = new THREE.ShapeGeometry(shape);
     geo.rotateX(-Math.PI / 2);

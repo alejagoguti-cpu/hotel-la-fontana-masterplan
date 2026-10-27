@@ -1,8 +1,11 @@
 import * as THREE from 'three';
+import { makeTreeImpostors } from './RealTrees.js';
+import { load as loadPBR } from './PBRSurfaces.js';
 
 /**
  * CityContext — Contexto real de Bogotá alrededor del hotel (estilo masterplan Umbra / Google Earth):
- *  · Ortofoto satelital real (Esri World Imagery) en 4 niveles de detalle (z19 → z13, hasta ~22 km).
+ *  · Cerca del hotel (~900 m) el suelo es adoquín y césped fotogramétricos (Poly Haven); la ortofoto solo
+ *    se usa como máscara de zonas verdes. Más lejos, ortofoto real (Esri) con el relieve de los Cerros.
  *  · Relieve real (Terrarium / Mapzen DEM): los Cerros Orientales aparecen en el horizonte.
  *  · ~6.400 construcciones reales de Catastro Bogotá (data/geometry/city-context.json), con la cubierta
  *    texturizada con la propia ortofoto y fachadas de ladrillo / pañete con ventanas por piso.
@@ -115,7 +118,7 @@ export class CityContext {
     const geo = new THREE.PlaneGeometry(w, d, segs, segs);
     geo.rotateX(-Math.PI / 2);
     geo.translate((m.x0 + m.x1) / 2, 0, (m.zN + m.zS) / 2);
-    const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 1, metalness: 0, color: 0xe4e4e4, envMapIntensity: 0.25 });
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.94, metalness: 0, color: 0xffffff, envMapIntensity: 0.25 });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.y = y;
     mesh.receiveShadow = !!opts.shadow;
@@ -124,6 +127,83 @@ export class CityContext {
     const level = { ...m, half, canvas: cv, ctx, tex, mesh, geo, y };
     this.levels.push(level);
     return level;
+  }
+
+  /** Nivel lejano: ortofoto real (contexto urbano y montaña), con un recorte donde está el nivel cercano. */
+  _photoMat(level, H) {
+    const mat = level.mesh.material;
+    mat.map = level.tex; mat.color.setHex(0xe4e4e4); mat.roughness = 1;
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vCtxW;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvCtxW = (modelMatrix * vec4(transformed, 1.0)).xz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vCtxW;')
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\nif (abs(vCtxW.x - ${H.cx.toFixed(2)}) < ${H.hx.toFixed(2)} && abs(vCtxW.y - ${H.cz.toFixed(2)}) < ${H.hz.toFixed(2)}) discard;`);
+    };
+    mat.customProgramCacheKey = () => `ctxhole_${H.cx.toFixed(1)}_${H.cz.toFixed(1)}_${H.hx.toFixed(1)}_${H.hz.toFixed(1)}`;
+    mat.needsUpdate = true;
+  }
+
+  /**
+   * Suelo realista: césped / asfalto / concreto PBR a escala real. La ortofoto se lee muy desenfocada
+   * solo como máscara (verde → césped; gris oscuro → asfalto; gris claro → concreto), así el trazado de
+   * parques y calles de Bogotá es el real pero no se ve ninguna foto pixelada.
+   */
+  _groundMat(level, H) {
+    if (!CityContext._gtex) {
+      CityContext._gtex = { g: loadPBR('leafy_grass', 'diff', true), a: loadPBR('asphalt_02', 'diff', true), c: loadPBR('herringbone_pavement', 'diff', true) };
+    }
+    const T = CityContext._gtex;
+    const mat = level.mesh.material;
+    const uni = {
+      tSat: { value: level.tex }, uSatB: { value: new THREE.Vector4(level.x0, level.zN, level.x1 - level.x0, level.zS - level.zN) },
+      tGrass: { value: T.g }, tAsph: { value: T.a }, tConc: { value: T.c }
+    };
+    const holeGLSL = H ? `if (abs(vGW.x - ${H.cx.toFixed(2)}) < ${H.hx.toFixed(2)} && abs(vGW.z - ${H.cz.toFixed(2)}) < ${H.hz.toFixed(2)}) discard;` : '';
+    mat.onBeforeCompile = (sh) => {
+      Object.assign(sh.uniforms, uni);
+      sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGW;')
+        .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
+        varying vec3 vGW;
+        uniform sampler2D tSat, tGrass, tAsph, tConc; uniform vec4 uSatB;`)
+        .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n${holeGLSL}`)
+        .replace('#include <map_fragment>', `
+          vec2 w = vGW.xz;
+          vec2 st = (w - uSatB.xy) / uSatB.zw; st.y = 1.0 - st.y;
+          vec3 s = texture2D(tSat, st, 0.6).rgb;               // calco del trazado real (sin desenfoque)
+          float gr = (s.g - max(s.r, s.b)) / max(s.g, 0.015);
+          float veg = smoothstep(0.09, 0.15, gr);
+          float lum = dot(s, vec3(0.3, 0.59, 0.11));
+          float dist = length(vGW - cameraPosition);
+          float far = smoothstep(260.0, 1400.0, dist);
+          mat2 R = mat2(0.7986, -0.6018, 0.6018, 0.7986);
+          // promedios (último nivel de mipmap) para la lejanía: sin repetición ni moiré
+          vec3 gAvg = texture2D(tGrass, vec2(0.5), 14.0).rgb, aAvg = texture2D(tAsph, vec2(0.5), 14.0).rgb, cAvg = texture2D(tConc, vec2(0.5), 14.0).rgb;
+          vec3 grass = gAvg, asph = aAvg, conc = cAvg;
+          if (far < 0.999) {
+            float mx = smoothstep(0.35, 0.65, texture2D(tGrass, w / 61.0).g / max(gAvg.g * 2.0, 0.01));
+            grass = mix(texture2D(tGrass, w / 2.4).rgb, texture2D(tGrass, R * w / 3.7 + 0.31).rgb, mx);
+            grass *= mix(0.82, 1.12, texture2D(tConc, R * w / 83.0).r / max(cAvg.r * 2.0, 0.01));
+            asph = mix(texture2D(tAsph, w / 4.5).rgb, texture2D(tAsph, R * w / 6.9 + 0.5).rgb, 0.5);
+            conc = mix(texture2D(tConc, w / 2.2).rgb, texture2D(tConc, R * w / 2.9 + 0.4).rgb, 0.0);
+            grass = mix(grass, gAvg, far); asph = mix(asph, aAvg, far); conc = mix(conc, cAvg, far);
+          }
+          // el parque se tiñe levemente con el verde real (zonas secas / sombreadas)
+          // césped uniforme (sin manchas de la foto)
+          // todo lo que no es zona verde es adoquín (en espiga); el asfalto de las vías ya está modelado
+          // adoquín gris de concreto (espiga) para andenes, plazoletas y patios; asfalto donde la foto es oscura
+          conc = mix(vec3(dot(conc, vec3(0.3, 0.59, 0.11))), conc, 0.22) * 1.15;
+          vec3 paved = mix(asph, conc, smoothstep(0.055, 0.085, lum));
+          vec3 ground = mix(paved, grass, veg);
+          // borde exterior: se funde con la ortofoto del nivel lejano (sin costura)
+          vec2 eb = min(st, 1.0 - st) * uSatB.zw;
+          float edge = 1.0 - smoothstep(20.0, 180.0, min(eb.x, eb.y));
+          ground = mix(ground, texture2D(tSat, st).rgb * 0.9, edge);
+          diffuseColor.rgb *= ground;
+        `);
+    };
+    mat.customProgramCacheKey = () => `ground_${H ? `${H.cx.toFixed(1)}_${H.cz.toFixed(1)}_${H.hx.toFixed(1)}` : 'full'}`;
+    mat.needsUpdate = true;
   }
 
   _applyHeights(level) {
@@ -157,19 +237,9 @@ export class CityContext {
     const L0 = mob ? null : this._makeLevel(19, 340, 40, -0.16, { shadow: true });
     const hole = (L) => ({ cx: (L.x0 + L.x1) / 2, cz: (L.zN + L.zS) / 2, hx: (L.x1 - L.x0) / 2 - 1, hz: (L.zS - L.zN) / 2 - 1 });
     // Los niveles lejanos no se dibujan bajo los cercanos
-    const addHole = (outer, inner) => {
-      const H = hole(inner);
-      outer.mesh.material.onBeforeCompile = (s) => {
-        s.vertexShader = s.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 vCtxW;')
-          .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvCtxW = (modelMatrix * vec4(transformed, 1.0)).xz;');
-        s.fragmentShader = s.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec2 vCtxW;')
-          .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\nif (abs(vCtxW.x - ${H.cx.toFixed(2)}) < ${H.hx.toFixed(2)} && abs(vCtxW.y - ${H.cz.toFixed(2)}) < ${H.hz.toFixed(2)}) discard;`);
-      };
-      // cada nivel recorta un rectángulo distinto: clave de programa propia (si no, three.js reutiliza el shader)
-      outer.mesh.material.customProgramCacheKey = () => `ctxhole_${H.cx.toFixed(1)}_${H.cz.toFixed(1)}_${H.hx.toFixed(1)}_${H.hz.toFixed(1)}`;
-      outer.mesh.material.needsUpdate = true;
-    };
-    addHole(L3, L2); addHole(L2, L1); if (L0) addHole(L1, L0);
+    // Lejos (ciudad y Cerros Orientales): la ortofoto real se conserva. Cerca del hotel: adoquín / césped reales.
+    this._photoMat(L3, hole(L2)); this._photoMat(L2, hole(L1));
+    this._groundMat(L1, L0 ? hole(L0) : null); if (L0) this._groundMat(L0, null);
 
     // construcciones: archivo precalculado del repositorio o, si no está, consulta en vivo al Catastro de Bogotá
     const cityP = fetch('./data/geometry/city-context.json')
@@ -390,38 +460,23 @@ export class CityContext {
     }
     if (!pts.length) return;
 
-    // Una copa redondeada y sombreada evita el aspecto de poliedros separados del fondo anterior.
-    const crownGeo = new THREE.SphereGeometry(1, 10, 8);
-    const trunkGeo = new THREE.CylinderGeometry(0.11, 0.17, 1, 6);
-    trunkGeo.translate(0, 0.5, 0);
-    const crownMat = new THREE.MeshStandardMaterial({ roughness: 0.96, metalness: 0 });
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x49392b, roughness: 1 });
-    const crowns = new THREE.InstancedMesh(crownGeo, crownMat, pts.length);
-    const trunks = new THREE.InstancedMesh(trunkGeo, trunkMat, pts.length);
+    // Arboleda de la ciudad: la imagen real del fresno (SKPTrees) girada siempre hacia la cámara,
+    // teñida suavemente con el color de la ortofoto (2 triángulos por árbol).
+    const crowns = makeTreeImpostors(pts.length);
     const matrix = new THREE.Matrix4(), rotation = new THREE.Quaternion();
     const scale = new THREE.Vector3(), position = new THREE.Vector3(), color = new THREE.Color();
-    const up = new THREE.Vector3(0, 1, 0);
+    const white = new THREE.Color(1, 1, 1);
     pts.forEach(([x, z, r, g, b, variation, widthVariation, hueVariation], k) => {
       const groundY = this.heightAt(x, z);
-      const radius = 2.0 + widthVariation * 1.6;
-      const crownHeight = 3.6 + variation * 2.2;
-      const trunkHeight = 2.4 + hueVariation * 2.2;
-      rotation.setFromAxisAngle(up, rand(x, z, 6) * Math.PI * 2);
-      position.set(x, groundY + trunkHeight + crownHeight * 0.4, z);
-      matrix.compose(position, rotation, scale.set(radius, crownHeight * 0.58, radius * (0.78 + variation * 0.16)));
+      const h = 6.5 + variation * 6 + widthVariation * 2;
+      matrix.compose(position.set(x, groundY - 0.1, z), rotation, scale.set(h * (0.9 + hueVariation * 0.3), h, 1));
       crowns.setMatrixAt(k, matrix);
-
-      color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace);
-      color.lerp(new THREE.Color(0x59784c), 0.32).multiplyScalar(1.04);
-      if (hueVariation > 0.72) color.lerp(new THREE.Color(0x82905a), 0.14);
-      crowns.setColorAt(k, color);
-
-      matrix.compose(position.set(x, groundY, z), rotation, scale.set(0.82, trunkHeight + 0.25, 0.82));
-      trunks.setMatrixAt(k, matrix);
+      color.setRGB(r / 255, g / 255, b / 255, THREE.SRGBColorSpace).multiplyScalar(2.2);
+      crowns.setColorAt(k, white.clone().lerp(color, 0.3));
     });
-    crowns.castShadow = trunks.castShadow = true;
-    crowns.receiveShadow = true;
-    this.group.add(crowns, trunks);
+    crowns.castShadow = false;
+    crowns.receiveShadow = false;
+    this.group.add(crowns);
     this.trees = crowns;
   }
 

@@ -8,6 +8,7 @@ import { SiteDetails } from './SiteDetails.js';
 import { applyPBR, SURFACES } from './PBRSurfaces.js';
 import { LaFontanaTower } from './LaFontanaTower.js';
 import { Traffic } from './Traffic.js';
+import { RealTrees } from './RealTrees.js';
 
 // Torre de la Carrera 15 y su ala vecina (foto de la plaza): estilo distinto
 const TOWER_CENTER = [47.58, -0.93];
@@ -451,7 +452,7 @@ export class HotelBuildingBuilder {
     applyPBR(calzadaMat, SURFACES.ASPHALT, { metersPerTile: 5.0, tint: 0xb8b8b8, normalScale: 1.0, macro: { macroScale: 0.06, strength: 0.38 } });
     const andenMat = this.materials.get('SIDEWALK_PAVING');
     const alamedaMat = this.materials.get('TURF_GRASS');
-    applyPBR(alamedaMat, SURFACES.GRASS, { metersPerTile: 3.0, tint: 0xc8d4b8, normalScale: 1.05, macro: { macroScale: 0.05, strength: 0.4 } });
+    applyPBR(alamedaMat, SURFACES.GRASS, { metersPerTile: 2.4, tint: 0xd8e2c8, normalScale: 1.25, rough: true, macro: { macroScale: 0.045, strength: 0.35 } });
     const cicloMat = this.materials.get('BIKEWAY_BLUE');
 
     for (const poly of (urbanNetwork.calzadas || [])) {
@@ -777,140 +778,21 @@ export class HotelBuildingBuilder {
     addSafeGrove(-30, -55, 15, 12);
     addSafeGrove(115, 75, 18, 15);
 
-    const cardBaseGeo = new THREE.PlaneGeometry(1, 1);
-    const discBaseGeo = new THREE.PlaneGeometry(1, 1);
-    const puffBaseGeo = new THREE.PlaneGeometry(1, 1);
-    const shadowBaseGeo = new THREE.PlaneGeometry(1, 1);
-    const trunkBaseGeo = new THREE.CylinderGeometry(0.14, 0.32, 1, 8);
-    const rootBaseGeo = new THREE.CylinderGeometry(0.28, 0.52, 0.35, 8);
-    const branchBaseGeo = new THREE.CylinderGeometry(0.06, 0.12, 1, 6);
-
+    // Árboles reales (texturas del archivo SKPTrees de Aleja), instanciados y con viento
+    const points = [];
     for (let i = 0; i < candidatePoints.length; i++) {
       const [tx, tz] = candidatePoints[i];
-
       if (isInsideRoadway(tx, tz)) continue;
       const explicitTree = courtyardTrees.some(([cx, cz]) => cx === tx && cz === tz);
       if (!explicitTree && tx >= -16 && tx <= 50 && tz >= -16 && tz <= 15) {
         const inCourtyard = (tx >= 6.5 && tx <= 25.5 && tz >= -5.8 && tz <= 9.8);
         if (!inCourtyard) continue;
       }
-
-      const tree = new THREE.Group();
-      const hash1 = Math.abs(Math.sin(tx * 12.9898 + tz * 78.233) * 43758.5453);
-      const hash2 = Math.abs(Math.cos(tx * 26.6514 + tz * 45.197) * 28461.1278);
-      const rot = (hash1 % 6.28);
-
-      let spIdx = 0;
-      const spVal = (hash1 * 100) % 100;
-      if (spVal < 30) spIdx = 0;
-      else if (spVal < 55) spIdx = 1;
-      else if (spVal < 75) spIdx = 2;
-      else if (spVal < 90) spIdx = 3;
-      else spIdx = 4;
-
-      const spec = speciesConfig[spIdx];
-      const sizeMult = 0.82 + (hash2 % 0.38);
-      const treeHeight = spec.baseHeight * sizeMult;
-      const canopyWidth = spec.baseWidth * sizeMult;
-      const trunkH = spec.trunkH * sizeMult;
-      const canopyH = treeHeight - trunkH * 0.7;
-
-      if (shadowMat) {
-        const shadow = new THREE.Mesh(shadowBaseGeo, shadowMat);
-        shadow.rotation.x = -Math.PI / 2;
-        shadow.position.set(0, 0.02, 0);
-        shadow.scale.set(canopyWidth * 1.05, canopyWidth * 1.05, 1);
-        tree.add(shadow);
-      }
-
-      const trunk = new THREE.Mesh(trunkBaseGeo, trunkMat);
-      trunk.position.y = trunkH / 2;
-      trunk.scale.set(sizeMult, trunkH, sizeMult);
-      trunk.castShadow = true;
-      tree.add(trunk);
-
-      const roots = new THREE.Mesh(rootBaseGeo, trunkMat);
-      roots.position.y = 0.16 * sizeMult;
-      roots.scale.set(sizeMult, sizeMult, sizeMult);
-      tree.add(roots);
-
-      const b1 = new THREE.Mesh(branchBaseGeo, trunkMat);
-      b1.position.set(0.35 * sizeMult, trunkH * 0.78, 0.22 * sizeMult);
-      b1.rotation.set(0.48, 0.25, -0.55);
-      b1.scale.set(sizeMult, 1.8 * sizeMult, sizeMult);
-      b1.castShadow = true;
-
-      const b2 = new THREE.Mesh(branchBaseGeo, trunkMat);
-      b2.position.set(-0.32 * sizeMult, trunkH * 0.82, -0.2 * sizeMult);
-      b2.rotation.set(-0.45, 0.2, 0.58);
-      b2.scale.set(sizeMult, 1.7 * sizeMult, sizeMult);
-      b2.castShadow = true;
-
-      tree.add(b1, b2);
-
-      const foliageGroup = new THREE.Group();
-      const canopyBaseY = trunkH * 0.75;
-
-      const numCards = spec.cards;
-      for (let a = 0; a < numCards; a++) {
-        const angle = (a * Math.PI) / numCards;
-        const card = new THREE.Mesh(cardBaseGeo, spec.mat);
-        card.position.set(0, canopyBaseY + canopyH / 2, 0);
-        card.rotation.y = angle;
-        card.scale.set(canopyWidth, canopyH, 1);
-        card.castShadow = true;
-        card.receiveShadow = true;
-        foliageGroup.add(card);
-      }
-
-      const numDiscs = spec.discs;
-      for (let d = 0; d < numDiscs; d++) {
-        const t = (d + 1) / (numDiscs + 1);
-        const disc = new THREE.Mesh(discBaseGeo, spec.mat);
-        disc.rotation.x = -Math.PI / 2 + (d % 2 === 0 ? 0.12 : -0.12);
-        disc.rotation.z = (d * 0.4);
-        disc.position.set(0, canopyBaseY + canopyH * t, 0);
-        const discW = canopyWidth * (1.0 - Math.abs(t - 0.5) * 0.65);
-        disc.scale.set(discW, discW, 1);
-        disc.castShadow = true;
-        foliageGroup.add(disc);
-      }
-
-      const numPuffs = spec.puffs;
-      for (let p = 0; p < numPuffs; p++) {
-        const pAngle = (p / numPuffs) * Math.PI * 2 + 0.3;
-        const pRad = canopyWidth * 0.35;
-        const px = Math.cos(pAngle) * pRad;
-        const pz = Math.sin(pAngle) * pRad;
-        const py = canopyBaseY + canopyH * (0.35 + (p % 3) * 0.2);
-
-        const puffW = canopyWidth * 0.55;
-        const puffH = canopyH * 0.55;
-
-        const puff1 = new THREE.Mesh(puffBaseGeo, spec.mat);
-        puff1.position.set(px, py, pz);
-        puff1.rotation.y = pAngle;
-        puff1.scale.set(puffW, puffH, 1);
-        puff1.castShadow = true;
-
-        const puff2 = new THREE.Mesh(puffBaseGeo, spec.mat);
-        puff2.position.set(px, py, pz);
-        puff2.rotation.y = pAngle + Math.PI / 2;
-        puff2.scale.set(puffW, puffH, 1);
-        puff2.castShadow = true;
-
-        foliageGroup.add(puff1, puff2);
-      }
-
-      foliageGroup.rotation.z = (hash1 % 0.1) - 0.05;
-      foliageGroup.rotation.x = (hash2 % 0.1) - 0.05;
-
-      tree.add(foliageGroup);
-      tree.position.set(tx, 0.08, tz);
-      tree.rotation.y = rot;
-      treeGroup.add(tree);
+      // plazoleta: urapanes y almeces (sin pinos ni palmas pegados a la fachada)
+      points.push(explicitTree ? [tx, 0.05, tz, i % 2 ? 'ash' : 'celtis'] : [tx, 0.05, tz]);
     }
-
+    this.realTrees = this.realTrees || new RealTrees();
+    this.realTrees.plant(points, treeGroup);
     this.contextGroup.add(treeGroup);
   }
 

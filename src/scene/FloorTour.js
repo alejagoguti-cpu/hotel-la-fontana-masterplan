@@ -189,7 +189,7 @@ export class FloorTour {
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
-    winMat.color.setScalar(2.1); // más brillante que el interior: la luz de día "quema" y florece (bloom)
+    winMat.color.setScalar(1.5); // más brillante que el interior: la luz de día "quema" y florece (bloom)
     const frameMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.5, metalness: 0.3 });
     for (const r of this.rooms) {
       for (const w of r.wins) {
@@ -452,10 +452,12 @@ export class FloorTour {
     this.group.visible = on;
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
-    R.toneMappingExposure = on ? this._baseExposure * 1.35 : this._baseExposure;
+    R.toneMappingExposure = on ? this._baseExposure * 0.92 : this._baseExposure;
     if (on) this.look?.enable(r || this.current); else this.look?.disable();
-    this.roomLight.intensity = on ? 12 : 0;
-    this.fillLight.intensity = on ? 6 : 0;
+    this.app.revitFurniture?.setInterior(on);
+    this.app.postfx?.setInterior?.(on);
+    this.roomLight.intensity = on ? (this.app.revitFurniture ? 1.2 : 6) : 0;
+    this.fillLight.intensity = on ? (this.app.revitFurniture ? 0.5 : 1.8) : 0;
     if (on && r) {
       this.roomLight.position.set(r.pole.x, P2 + 2.15, r.pole.z);
       const v = r.vps[0].pos;

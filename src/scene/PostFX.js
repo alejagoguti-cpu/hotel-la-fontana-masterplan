@@ -5,6 +5,7 @@ import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
 
 /**
  * PostFX — Cadena de posproceso tipo "cinematic" (equivalente a Post Process Volume de Unreal):
@@ -59,11 +60,11 @@ export class PostFX {
 
     // Tono "render de masterplan": ACES, luminoso y saturado (como los renders de Umbra / Lumion)
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.0;
+    renderer.toneMappingExposure = 0.95;
 
-    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: this.low ? 2 : 4 });
+    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 });
     this.composer = new EffectComposer(renderer, rt);
-    this.maxPixelRatio = Math.min(window.devicePixelRatio, this.low ? 1 : (mobile ? 1.5 : 2));
+    this.maxPixelRatio = Math.max(1, Math.min(window.devicePixelRatio, this.low ? 1.25 : (mobile ? 1.5 : 2)));
     this.composer.setPixelRatio(this.maxPixelRatio);
     this.composer.setSize(w, h);
     this.composer.addPass(new RenderPass(scene, camera));
@@ -79,15 +80,35 @@ export class PostFX {
       this.composer.addPass(this.ao);
     }
 
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.18, 0.4, 0.95);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.12, 0.4, 0.96);
     this.composer.addPass(this.bloom);
+
+    // profundidad de campo sutil (solo dentro de las habitaciones y con GPU dedicada)
+    this.bokeh = new BokehPass(scene, camera, { focus: 2.6, aperture: 0.0012, maxblur: 0.0035 });
+    this.bokeh.enabled = false;
+    this.composer.addPass(this.bokeh);
 
     this.grade = new ShaderPass(GradeShader);
     const u = this.grade.uniforms;
-    u.uContrast.value = 1.03; u.uSaturation.value = 1.14; u.uVignette.value = 0.1;
-    u.uWarm.value.set(1.0, 1.0, 0.985); u.uGrain.value = 0.006;
+    // cámara real: color neutro, contraste suave, viñeta de lente leve
+    u.uContrast.value = 1.04; u.uSaturation.value = 1.0; u.uVignette.value = 0.16;
+    u.uWarm.value.set(1.0, 1.0, 0.99); u.uGrain.value = 0.004; u.uLift.value = 0.012;
     this.composer.addPass(this.grade);
     this.composer.addPass(new OutputPass());
+  }
+
+  /** Look "render de hotel boutique": cálido, contraste suave, viñeta de lente y desenfoque leve de fondo. */
+  setInterior(on) {
+    const u = this.grade.uniforms;
+    if (on) {
+      u.uContrast.value = 1.1; u.uSaturation.value = 0.94; u.uVignette.value = 0.26;
+      u.uWarm.value.set(1.04, 1.0, 0.93); u.uLift.value = 0.006; u.uGrain.value = 0.006;
+      this.bokeh.enabled = !this.low;
+    } else {
+      u.uContrast.value = 1.04; u.uSaturation.value = 1.0; u.uVignette.value = 0.16;
+      u.uWarm.value.set(1.0, 1.0, 0.99); u.uLift.value = 0.012; u.uGrain.value = 0.004;
+      this.bokeh.enabled = false;
+    }
   }
 
   setPixelRatio(pr) {

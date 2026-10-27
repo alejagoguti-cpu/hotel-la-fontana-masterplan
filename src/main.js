@@ -7,9 +7,12 @@ import { LocationModal } from './ui/LocationModal.js';
 import { BimInspectorPanel } from './ui/BimInspectorPanel.js';
 import { store } from './state/store.js';
 import { WindowEditor } from './ui/WindowEditor.js';
+import { LoadingScreen } from './ui/LoadingScreen.js';
 
 class App {
   constructor() {
+    this.loading = new LoadingScreen();
+    this.loading.set(0.05, 'Cargando el modelo del hotel…');
     this.container = document.getElementById('canvas-container');
     this.scene = new MasterplanScene(this.container);
     window.__masterplan = this.scene;
@@ -36,9 +39,15 @@ class App {
     );
 
     this.setupTopBar();
-    this.scene.loadData().then(() => {
+    this.scene.loadData().then(async () => {
       this.windowEditor = new WindowEditor(this.scene);
-    });
+      this.loading.set(0.7, 'Cargando el contexto urbano de Bogotá…');
+      const city = this.scene.city?.ready || Promise.resolve();
+      await Promise.race([city, new Promise((r) => setTimeout(r, 9000))]);
+      this.loading.set(0.92, 'Optimizando la escena…');
+      await new Promise((r) => setTimeout(r, 1500));
+      this.loading.done();
+    }).catch((e) => { console.error(e); this.loading.done(); });
   }
 
   setupTopBar() {

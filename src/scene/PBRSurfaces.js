@@ -14,7 +14,7 @@ const CDN = 'https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k';
 const loader = new THREE.TextureLoader();
 loader.setCrossOrigin('anonymous');
 
-function load(id, kind, srgb) {
+export function load(id, kind, srgb) {
   const t = loader.load(`${LOCAL}/${id}_${kind}_1k.jpg`, undefined, undefined, () => {
     loader.load(`${CDN}/${id}/${id}_${kind}_1k.jpg`, (img) => { t.image = img.image; t.needsUpdate = true; });
   });
@@ -57,15 +57,21 @@ function addMacroVariation(mat, { macroScale = 0.071, strength = 0.35 } = {}) {
  * metersPerTile: tamaño real de la textura en metros; uvScale: unidades UV por metro
  * de la geometría (1 para ExtrudeGeometry en metros; 1/ancho para PlaneGeometry).
  */
-export function applyPBR(mat, id, { metersPerTile = 4, uvRepeat = null, tint = 0xffffff, normalScale = 1.0, macro = {}, minRoughness = 0.78 } = {}) {
+export function applyPBR(mat, id, { metersPerTile = 4, uvRepeat = null, tint = 0xffffff, normalScale = 1.0, macro = {}, minRoughness = 0.78, rough = false } = {}) {
   const rep = uvRepeat || new THREE.Vector2(1 / metersPerTile, 1 / metersPerTile);
   const maps = { map: load(id, 'diff', true), normalMap: load(id, 'nor_gl', false) };
   for (const k in maps) { maps[k].repeat.copy(rep); mat[k] = maps[k]; }
   mat.color.setHex(tint);
   // superficie exterior mate: sin reflejos de espejo (la rugosidad fotogramétrica
   // se usa solo como variación sobre un mínimo alto)
-  mat.roughnessMap = null;
-  mat.roughness = minRoughness + 0.15;
+  if (rough) {
+    // rugosidad fotogramétrica real (juntas, desgaste, brillo de la piedra pulida por el uso)
+    const r = load(id, 'rough', false); r.repeat.copy(rep);
+    mat.roughnessMap = r; mat.roughness = 1.0;
+  } else {
+    mat.roughnessMap = null;
+    mat.roughness = minRoughness + 0.15;
+  }
   mat.envMapIntensity = 0.45;
   mat.metalness = 0.0;
   mat.normalScale = new THREE.Vector2(normalScale, normalScale);
@@ -77,5 +83,7 @@ export const SURFACES = {
   GRASS: 'leafy_grass',                 // césped real con variación
   ASPHALT: 'asphalt_02',                 // asfalto con fisuras, parches y desgaste
   CONCRETE_WORN: 'concrete_floor_worn_001', // concreto desgastado con manchas
-  CONCRETE_PAVEMENT: 'concrete_pavement'    // placas de concreto con juntas
+  CONCRETE_PAVEMENT: 'concrete_pavement',   // placas de concreto con juntas
+  RED_PAVERS: 'red_brick_pavers',          // adoquín de arcilla roja (andenes de Bogotá)
+  HERRINGBONE: 'herringbone_pavement'      // adoquín en espina de pescado (plazoleta)
 };

@@ -12,6 +12,7 @@ import { FloorTour } from './FloorTour.js';
 import { NetworksLayer } from './NetworksLayer.js';
 import { batchStatic, snapshotMatrices, movingSince } from './StaticBatcher.js';
 import { applyWind, windUniforms } from './Wind.js';
+import { RevitRoomFurniture } from './RevitRoomFurniture.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -164,11 +165,35 @@ export class MasterplanScene {
       oldGroup.traverse((obj) => { if (obj.isMesh) obj.geometry?.dispose(); });
       this.interiorBuilder = new Piso2InteriorBuilder(this.materials);
       this.scene.add(this.interiorBuilder.build(arch, finishes, furniture, rooms));
+      this._useRevitFurniture(rooms);
       this.batchSoon();
       if (store.state.viewMode !== 'exterior') this.applyViewMode(store.state.viewMode);
     }).catch((e) => console.warn('Mobiliario de Piso 2 no disponible', e));
     if (window.requestIdleCallback) requestIdleCallback(load, { timeout: 1200 });
     else setTimeout(load, 300);
+  }
+
+  /** Mobiliario real del Revit (por capas Doble / Sencilla…) en vez del simplificado. */
+  _useRevitFurniture(rooms) {
+    const covered = RevitRoomFurniture.roomsCovered();
+    const list = Array.isArray(rooms) ? rooms : (rooms?.rooms || []);
+    const boxes = list.filter((r) => covered.includes(r.id) && r.bounds).map((r) => r.bounds);
+    const furn = this.interiorBuilder.categoryGroups?.furniture;
+    if (furn && boxes.length) {
+      const b = new THREE.Box3(), c = new THREE.Vector3();
+      furn.children.forEach((item) => {
+        b.setFromObject(item); if (b.isEmpty()) return;
+        b.getCenter(c);
+        const X = c.x * 1000, Y = -c.z * 1000;
+        if (boxes.some((r) => X >= r.minX && X <= r.maxX && Y >= r.minY && Y <= r.maxY)) item.visible = false;
+      });
+    }
+    const target = this.interiorBuilder.group;
+    new RevitRoomFurniture(this.renderer).load().then((rf) => {
+      this.revitFurniture = rf;
+      target.add(rf.group);
+      this.shadowsDirty = true;
+    });
   }
 
   setupEvents() {
@@ -393,7 +418,9 @@ export class MasterplanScene {
     const avg = p.ms / p.n; p.t = 0; p.ms = 0; p.n = 0;
     if (document.hidden) return;
     let pr = this.pixelRatio;
-    if (avg > 38 && pr > 0.6) pr = Math.max(0.6, pr - 0.15);
+    // nunca por debajo de la resolución nativa: se veía pixelado
+    const minPr = Math.min(1, this.maxPixelRatio);
+    if (avg > 38 && pr > minPr) pr = Math.max(minPr, pr - 0.15);
     else if (avg < 20 && pr < this.maxPixelRatio) pr = Math.min(this.maxPixelRatio, pr + 0.1);
     if (Math.abs(pr - this.pixelRatio) < 0.01) return;
     this.pixelRatio = pr;
