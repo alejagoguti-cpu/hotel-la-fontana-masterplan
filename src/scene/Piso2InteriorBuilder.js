@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { loopToShape, applyArchitecturalBrickUVs } from './HotelBuildingBuilder.js';
 import { buildItemMeshes } from './FurniturePrims.js';
-import { customModel } from './CatalogModels.js';
+import { customModel, customYaw } from './CatalogModels.js';
 
 const MM_TO_M = 0.001;
 
@@ -303,7 +303,8 @@ export class Piso2InteriorBuilder {
         if (custom) {
           custom.position.set(rev.c[0] * MM_TO_M, PISO2_Y, -rev.c[1] * MM_TO_M);
           const yaw = footDir.get(col.groupName + '|' + ((/\[(\w+)\]/.exec(item.code || '') || [])[1] || '-'));
-          if (yaw !== undefined) custom.rotation.y = yaw;
+          const own = customYaw(baseCode, item);
+          if (own !== undefined) custom.rotation.y = own; else if (yaw !== undefined) custom.rotation.y = yaw;
           itemGroup.add(custom);   // el grupo conserva su posición; sus mallas se registran para el BIM más abajo
           custom.traverse((o) => { if (o.isMesh) customMeshes.push(o); });
         } else {

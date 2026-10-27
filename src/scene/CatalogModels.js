@@ -139,12 +139,41 @@ function lamparaPiso(lib) {
   return g;
 }
 
+/** PO-01 Poltrona giratoria · ancho 60 × fondo 50 × H 80 — foto: carcasa envolvente de fieltro gris claro (respaldo alto con alas que se curvan hacia el frente), asiento acolchado redondeado, columna giratoria y base de 4 patas de roble abiertas en pirámide. */
+function poltrona(lib) {
+  const g = new THREE.Group(); g.name = 'PO-01 Poltrona';
+  const felt = cached(lib, 'fieltro', () => lib.realMaterial('tela_flint', 0.45, { roughness: 1, normalScale: 0.6, color: 0xc9cdd4 }));
+  const oak = std(lib, 'roble_claro', { color: 0xc4a07a, roughness: 0.6 });
+  const dark = std(lib, 'giratorio', { color: 0x1b1a18, roughness: 0.5, metalness: 0.5 });
+  // asiento: cojín redondeado 50 × 50
+  const seat = add(g, lathe(roundedProfile(0.25, 0, 0.075, 0.03), 48, 1.6), felt, 0, 0.45); seat.scale.set(1.0, 1, 0.9);
+  // carcasa envolvente: sector de anillo (abierto al frente +z) de R 0.30 y 0.03 de espesor, h 0.36 sobre el asiento
+  const R = 0.29, t = 0.03, open = 72 * Math.PI / 180, A0 = -Math.PI / 2 + open, A1 = -Math.PI / 2 - open + 2 * Math.PI;
+  const shell = new THREE.Shape();
+  shell.absarc(0, 0, R, A0, A1, false);
+  shell.absarc(0, 0, R - t, A1, A0, true);
+  shell.closePath();
+  const eg = new THREE.ExtrudeGeometry(shell, { depth: 0.36, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.008, bevelSegments: 2, curveSegments: 40 });
+  eg.rotateX(-Math.PI / 2);
+  add(g, eg, felt, 0, 0.47, 0.0);
+  // columna y base de 4 patas de roble en pirámide
+  add(g, new THREE.CylinderGeometry(0.03, 0.03, 0.18, 24), dark, 0, 0.36);
+  add(g, new THREE.CylinderGeometry(0.045, 0.045, 0.05, 24), dark, 0, 0.28);
+  for (let i = 0; i < 4; i++) {
+    const a = i * Math.PI / 2 + Math.PI / 4, len = 0.34, leg = add(g, new THREE.BoxGeometry(0.04, 0.035, len), oak);
+    const dx = Math.sin(a), dz = Math.cos(a);
+    leg.position.set(dx * 0.15, 0.14, dz * 0.15); leg.lookAt(dx * 0.3, 0, dz * 0.3); leg.rotateX(0);
+  }
+  return g;
+}
+
 export const CATALOG_MODELS = {
   'MA-01': { build: mesaNoche, dims: 'ø 40 cm × H 60 cm', inRoom: true },
   'M-01': { build: mesaCentro, dims: 'ø 80 cm × H 75 cm' },
   'MA-02': { build: mesaAuxiliar, dims: 'ø 40 cm × H 50 cm' },
   'TA-01': { build: tapeteRedondo, dims: 'ø 250 cm' },
   'LP-04': { build: lamparaMesa, dims: 'base ø 14 cm × H 45 cm' },
+  'PO-01': { build: poltrona, dims: '60 × 50 cm · H 80 cm', inRoom: true },
   'LP-02': { build: lamparaPiso, dims: 'ø 23 cm × H 135 cm' }
 };
 
@@ -152,4 +181,14 @@ export const CATALOG_MODELS = {
 export function customModel(code, lib, forRoom = false) {
   const c = CATALOG_MODELS[code];
   return c && (!forRoom || c.inRoom) ? c.build(lib) : null;
+}
+
+/** Giro propio de piezas con frente: la poltrona abre hacia el lado contrario al centro de su carcasa (dato de Revit: 1.er loft vs. el pedestal). Devuelve undefined si no aplica. */
+export function customYaw(code, item) {
+  if (code !== 'PO-01') return undefined;
+  const rev = (item.prims || []).find((p) => p.t === 'rev'), loft = (item.prims || []).find((p) => p.t === 'loft');
+  if (!rev || !loft) return undefined;
+  const pts = loft.loops[0], n = pts.length;
+  const bx = pts.reduce((a, q) => a + q[0], 0) / n - rev.c[0], bz = -(pts.reduce((a, q) => a + q[1], 0) / n - rev.c[1]);   // dirección hacia el respaldo (mundo)
+  return Math.atan2(-bx, -bz);
 }
