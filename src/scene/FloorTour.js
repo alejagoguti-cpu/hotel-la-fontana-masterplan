@@ -232,7 +232,7 @@ export class FloorTour {
     }
     this._buildCornices();
     try { this.doors = new RoomDoors(this.app, this); this.group.add(this.doors.build(this.app.materials, this.rooms)); this.doors.attach(); } catch (e) { console.warn('puertas', e); }
-    try { buildBathroomDetails(this.app.materials, this.group, this.rooms); } catch (e) { console.warn('baño', e); }
+    try { this.bathLights = buildBathroomDetails(this.app.materials, this.group, this.rooms).userData.lights; } catch (e) { console.warn('baño', e); }
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
@@ -495,7 +495,25 @@ export class FloorTour {
     });
   }
 
+  /** En el recorrido por habitación se apaga el entorno (ciudad y edificios de contexto): no se ve desde dentro, choca con cortinas
+   *  y muros, y es ~1,3 M de triángulos + sus sombras en cada cuadro. Las sombras del sol se congelan (el cielo raso las bloquea). */
+  _setEnvironment(show) {
+    const a = this.app, R = a.renderer;
+    if (!show) {
+      if (!this._envHidden) { this._envHidden = [a.city?.group, a.buildingBuilder?.contextGroup].filter((g) => g && g.visible); this._envHidden.forEach((g) => { g.visible = false; }); }
+      R.shadowMap.autoUpdate = false; R.shadowMap.needsUpdate = true;
+    } else {
+      (this._envHidden || []).forEach((g) => { g.visible = true; }); this._envHidden = null;
+      R.shadowMap.autoUpdate = true;
+    }
+  }
+
   _showDressing(on, r = null) {
+    this._setEnvironment(!on);
+    if (on) {   // las luces del interior (y las del baño) se mueven a la habitación en uso: el número de luces no cambia
+      const off = this.app.revitFurniture?.focusRoom?.((r || this.current)?.id) || [0, 0];
+      this.bathLights?.position.set(off[0], 0, off[1]);
+    }
     this.group.visible = on;
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;

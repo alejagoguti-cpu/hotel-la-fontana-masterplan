@@ -1,15 +1,17 @@
 import * as THREE from 'three';
 
 /**
- * RoomDoors — par de puertas de entrada de las habitaciones 215 y 216 (plano general AI-100, Piso 2).
+ * RoomDoors — pares de puertas de entrada de las habitaciones (plano general AI-100, Piso 2).
  *
- * En el plano las dos puertas van juntas en el muro del pasillo, al fondo del vestíbulo de cada habitación, bajo un solo marco
- * ("apertura de marco completo entre dos puertas", spec INT-701/702): hojas planas de melamina Sikuani, paño de madera entre
- * ellas, recuadro de roble claro con riel LED por dentro, luz fría bajo las hojas, manija negra, y placa de número oscura con
- * aplique a cada lado (INT-626).
+ * En el plano las dos puertas de cada par van juntas en el muro del pasillo, al fondo del vestíbulo de cada habitación, bajo un
+ * solo marco ("apertura de marco completo entre dos puertas", spec INT-701/702): hojas planas de melamina Sikuani, paño de
+ * madera entre ellas, recuadro de roble claro con riel LED por dentro, luz fría bajo las hojas, manija negra, y placa de
+ * número oscura con aplique a cada lado (INT-626).
  *
- * El GLB de Revit no exporta puertas y trae ese muro macizo: el hueco se abre con un recorte (planos de corte de material en
- * forma de caja), y las hojas se abren al tocarlas. Con la hoja abierta se puede caminar por el vano (FloorTour._blocked).
+ * El GLB de Revit no exporta puertas y trae ese muro macizo: el hueco se abre con un recorte en el shader de los materiales
+ * de muro (hasta MAX_HOLES cajas a la vez), y las hojas se abren al tocarlas. Con la hoja abierta se puede caminar por el
+ * vano (FloorTour._blocked).
+ *   pair   → agrupa las dos puertas que comparten marco
  *   x, z   → centro de la hoja sobre el eje del muro (z = −12,33 m) · w → ancho de hoja
  *   hinge  → lado de la bisagra en el eje local (+1 / −1) · out → hacia el pasillo
  *   plate  → [x, z] de la placa sobre el muro exterior
@@ -17,11 +19,45 @@ import * as THREE from 'three';
 const P2 = 3.02;
 const DOOR_H = 2.1;
 const OPEN_ANGLE = 1.75;   // ≈100°, hacia el vestíbulo de la habitación
+const MAX_HOLES = 4;
 
 export const ROOM_DOORS = {
-  'HAB-215': { number: '215', x: -1.055, z: -12.33, w: 0.9, hinge: 1, plate: [-2.1, -12.64], out: [0, -1] },
-  'HAB-216': { number: '216', x: 0.395, z: -12.33, w: 0.8, hinge: -1, plate: [1.28, -12.64], out: [0, -1] }
+  'HAB-215': { pair: 'A', number: '215', x: -1.055, z: -12.33, w: 0.9, hinge: 1, plate: [-2.1, -12.64], out: [0, -1] },
+  'HAB-216': { pair: 'A', number: '216', x: 0.395, z: -12.33, w: 0.8, hinge: -1, plate: [1.28, -12.64], out: [0, -1] },
+  // 217 y 218 son la 215 y la 216 desplazadas 7,03 m
+  'HAB-217': { pair: 'B', number: '217', x: 5.971, z: -12.332, w: 0.9, hinge: 1, plate: [4.926, -12.642], out: [0, -1] },
+  'HAB-218': { pair: 'B', number: '218', x: 7.425, z: -12.329, w: 0.8, hinge: -1, plate: [8.31, -12.639], out: [0, -1] }
 };
+
+// ---------------------------------------------------------------- hueco en muros (shader)
+const holeMin = Array.from({ length: MAX_HOLES }, () => new THREE.Vector3(1e9, 1e9, 1e9));
+const holeMax = Array.from({ length: MAX_HOLES }, () => new THREE.Vector3(-1e9, -1e9, -1e9));
+let holeCount = 0;
+
+function addHole(b) {
+  if (holeCount >= MAX_HOLES) return;
+  holeMin[holeCount].set(b.x0, b.y0, b.z0); holeMax[holeCount].set(b.x1, b.y1, b.z1); holeCount++;
+}
+
+/** Hace que el material descarte los fragmentos que caen dentro de cualquiera de las cajas de hueco (en coordenadas de mundo). */
+function patchMaterial(m) {
+  if (!m || m.isShaderMaterial || m.userData.__hole) return;
+  m.userData.__hole = true;
+  const prev = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    if (prev) prev(sh, r);
+    sh.uniforms.uHoleMin = { value: holeMin }; sh.uniforms.uHoleMax = { value: holeMax };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vHolePos;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\n vHolePos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>\nvarying vec3 vHolePos;\nuniform vec3 uHoleMin[${MAX_HOLES}];\nuniform vec3 uHoleMax[${MAX_HOLES}];`)
+      .replace('#include <clipping_planes_fragment>', `#include <clipping_planes_fragment>\n for (int i = 0; i < ${MAX_HOLES}; i++) { if (all(greaterThan(vHolePos, uHoleMin[i])) && all(lessThan(vHolePos, uHoleMax[i]))) discard; }`);
+  };
+  const key = m.customProgramCacheKey ? m.customProgramCacheKey.bind(m) : () => '';
+  m.customProgramCacheKey = () => key() + '|hole' + MAX_HOLES;
+  m.needsUpdate = true;
+}
 
 function metricUV(geo, w, h, d) {
   const uv = geo.attributes.uv, sizes = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
@@ -47,12 +83,12 @@ export class RoomDoors {
     this.ray = new THREE.Raycaster();
     this.down = null;
     this.carved = false;
-    this.carveBox = null;
+    this.carveBoxes = [];
   }
 
   build(lib, rooms) {
     const ids = new Set((rooms || []).map((r) => r.id));
-    // materiales propios: el recorte del hueco se aplica a los materiales de los muros y no debe cortar las hojas ni el marco
+    // materiales propios: el recorte se aplica a los materiales de los muros y no debe cortar las hojas ni el marco
     const wood = lib.get('NOGAL').clone(), oak = lib.get('WALL_LISMORE').clone(), steel = lib.get('ACERO').clone();
     const led = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc487).multiplyScalar(2.2), toneMapped: false });
     const cool = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xcfe0ff).multiplyScalar(1.6), toneMapped: false });
@@ -94,50 +130,47 @@ export class RoomDoors {
         rect: { x0: d.x - w / 2 - 0.05, x1: d.x + w / 2 + 0.05, z0: d.z - 0.6, z1: d.z + 0.55 } });
     }
 
-    // marco único del par: recuadro de roble claro, paño de madera entre hojas y riel LED por dentro
-    const x0 = Math.min(...active.map(([, d]) => d.x - d.w / 2)), x1 = Math.max(...active.map(([, d]) => d.x + d.w / 2));
-    const z = active[0][1].z, tr = 0.07, ld = 0.014, depth = 0.17, H = DOOR_H, yC = P2 + H / 2;
-    const frame = new THREE.Group(); frame.position.set(0, 0, z); this.group.add(frame);
-    mk(frame, tr, H + tr, depth, oak, x0 - ld - tr / 2, yC + tr / 2, 0);
-    mk(frame, tr, H + tr, depth, oak, x1 + ld + tr / 2, yC + tr / 2, 0);
-    mk(frame, x1 - x0 + 2 * (ld + tr), tr, depth, oak, (x0 + x1) / 2, P2 + H + tr / 2, 0);
-    for (const zz of [depth / 2 + 0.004, -depth / 2 - 0.004]) {
-      mk(frame, ld, H + ld, 0.012, led, x0 - ld / 2, yC + ld / 2, zz);
-      mk(frame, ld, H + ld, 0.012, led, x1 + ld / 2, yC + ld / 2, zz);
-      mk(frame, x1 - x0 + 2 * ld, ld, 0.012, led, (x0 + x1) / 2, P2 + H + ld / 2, zz);
+    // un marco por par: recuadro de roble claro, paño de madera entre hojas y riel LED por dentro
+    const pairs = {};
+    for (const e of active) (pairs[e[1].pair || e[0]] ||= []).push(e);
+    for (const list of Object.values(pairs)) {
+      const x0 = Math.min(...list.map(([, d]) => d.x - d.w / 2)), x1 = Math.max(...list.map(([, d]) => d.x + d.w / 2));
+      const z = list[0][1].z, tr = 0.07, ld = 0.014, depth = 0.17, H = DOOR_H, yC = P2 + H / 2;
+      const frame = new THREE.Group(); frame.position.set(0, 0, z); this.group.add(frame);
+      mk(frame, tr, H + tr, depth, oak, x0 - ld - tr / 2, yC + tr / 2, 0);
+      mk(frame, tr, H + tr, depth, oak, x1 + ld + tr / 2, yC + tr / 2, 0);
+      mk(frame, x1 - x0 + 2 * (ld + tr), tr, depth, oak, (x0 + x1) / 2, P2 + H + tr / 2, 0);
+      for (const zz of [depth / 2 + 0.004, -depth / 2 - 0.004]) {
+        mk(frame, ld, H + ld, 0.012, led, x0 - ld / 2, yC + ld / 2, zz);
+        mk(frame, ld, H + ld, 0.012, led, x1 + ld / 2, yC + ld / 2, zz);
+        mk(frame, x1 - x0 + 2 * ld, ld, 0.012, led, (x0 + x1) / 2, P2 + H + ld / 2, zz);
+      }
+      // paño de madera entre las hojas (entre sus bordes interiores)
+      const inner = list.map(([, d]) => [d.x - d.w / 2, d.x + d.w / 2]).sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i + 1 < inner.length; i++) {
+        const a = inner[i][1], b = inner[i + 1][0];
+        if (b - a > 0.05) mk(frame, b - a, H, depth, wood, (a + b) / 2, yC, 0);
+      }
+      // hueco en el muro macizo del GLB
+      this.carveBoxes.push({ x0, x1, y0: P2 + 0.03, y1: P2 + H + 0.06, z0: z - 0.3, z1: z + 0.3 });
     }
-    // paño de madera entre las dos hojas (entre sus bordes interiores)
-    const inner = active.map(([, d]) => [d.x - d.w / 2, d.x + d.w / 2]).sort((a, b) => a[0] - b[0]);
-    for (let i = 0; i + 1 < inner.length; i++) {
-      const a = inner[i][1], b = inner[i + 1][0];
-      if (b - a > 0.05) mk(frame, b - a, H, depth, wood, (a + b) / 2, yC, 0);
-    }
-    // hueco en el muro macizo del GLB: caja de recorte
-    this.carveBox = { x0, x1, y0: P2 + 0.03, y1: P2 + H + 0.06, z0: z - 0.3, z1: z + 0.3 };
     return this.group;
   }
 
-  /** Abre el hueco: los materiales de los muros descartan lo que cae dentro de la caja (planos de corte en intersección). */
+  /** Abre los huecos: los materiales de muro descartan lo que cae dentro de las cajas (se llama al entrar a una habitación). */
   applyCarve() {
-    if (this.carved || !this.carveBox) return;
-    const b = this.carveBox;
-    const planes = [
-      new THREE.Plane(new THREE.Vector3(1, 0, 0), -b.x1), new THREE.Plane(new THREE.Vector3(-1, 0, 0), b.x0),
-      new THREE.Plane(new THREE.Vector3(0, 1, 0), -b.y1), new THREE.Plane(new THREE.Vector3(0, -1, 0), b.y0),
-      new THREE.Plane(new THREE.Vector3(0, 0, 1), -b.z1), new THREE.Plane(new THREE.Vector3(0, 0, -1), b.z0)
-    ];
-    const box = new THREE.Box3(new THREE.Vector3(b.x0 - 0.05, b.y0, b.z0 - 0.05), new THREE.Vector3(b.x1 + 0.05, b.y1, b.z1 + 0.05));
+    if (this.carved || !this.carveBoxes.length) return;
+    this.carveBoxes.forEach(addHole);
+    const boxes = this.carveBoxes.map((b) => new THREE.Box3(new THREE.Vector3(b.x0 - 0.05, b.y0, b.z0 - 0.05), new THREE.Vector3(b.x1 + 0.05, b.y1, b.z1 + 0.05)));
     const seen = new Set(), tmp = new THREE.Box3();
-    this.app.renderer.localClippingEnabled = true;
     this.app.scene.traverse((o) => {
       if (!o.isMesh || !o.material || o.material.isShaderMaterial) return;
       let p = o, mine = false; while (p) { if (p === this.group) { mine = true; break; } p = p.parent; }
       if (mine) return;
       tmp.setFromObject(o);
-      if (!tmp.intersectsBox(box)) return;
+      if (!boxes.some((b) => tmp.intersectsBox(b))) return;
       for (const m of (Array.isArray(o.material) ? o.material : [o.material])) {
-        if (seen.has(m)) continue; seen.add(m);
-        m.clippingPlanes = planes; m.clipIntersection = true; m.needsUpdate = true;
+        if (seen.has(m)) continue; seen.add(m); patchMaterial(m);
       }
     });
     this.carved = true;

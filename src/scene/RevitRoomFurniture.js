@@ -52,6 +52,15 @@ export const ROOM_LAYERS = [
 ];
 const SHELL = { file: 'shell.glb', rooms: ['HAB-215', 'HAB-216'] };
 
+// Habitaciones con la MISMA forma que la 215 (doble) y la 216 (sencilla), verificado contra los polígonos de Revit
+// (217 = 215 desplazada 7,026 m, error 1 cm; 218 = 216 desplazada 7,03 m, error 7 cm). Se clonan capa de mobiliario y envolvente.
+// 'unit' = caja de la unidad sobre el eje de los muros (m) con la que se recorta el envolvente (el shell trae 215 y 216 juntas).
+const UNITS = { doble: { x0: -3.9, x1: -0.28 }, sencilla: { x0: -0.28, x1: 3.1 } };
+export const ROOM_INSTANCES = [
+  { id: 'HAB-217', from: 'doble', dx: 7.026, dz: -0.002 },
+  { id: 'HAB-218', from: 'sencilla', dx: 7.03, dz: 0.001 }
+];
+
 const _tl = new THREE.TextureLoader();
 const _texCache = new Map();
 const _nrmCache = new Map();
@@ -199,6 +208,9 @@ export class RevitRoomFurniture {
     this.layers = {};
     this.lights = new THREE.Group(); this.lights.name = 'LucesInterior'; this.lights.visible = false;
     this.group.add(this.lights);
+    if (renderer) renderer.localClippingEnabled = true;   // recorte del envolvente por unidad
+    this.instances = []; this.shellClones = [];
+    this._renderer = renderer;
     this.aniso = renderer ? Math.min(8, renderer.capabilities.getMaxAnisotropy()) : 4;
     this.loader = new GLTFLoader();
     this.loader.setMeshoptDecoder(MeshoptDecoder);
@@ -248,9 +260,43 @@ export class RevitRoomFurniture {
       this.layers[L.id] = g;
       this.group.add(g);
     });
+    this._instantiate();
+    this.group.updateMatrixWorld(true);
     this._buildLights();
     this._buildMirrors();
     return this;
+  }
+
+  /** Clona capa + envolvente de la 215 / 216 para las habitaciones con la misma forma (geometría y materiales compartidos). */
+  _instantiate() {
+    for (const inst of ROOM_INSTANCES) {
+      const src = this.layers[inst.from], u = UNITS[inst.from];
+      if (!src) continue;
+      const g = src.clone(true); g.name = 'Capa ' + inst.id; g.position.set(inst.dx, 0, inst.dz);
+      g.traverse((o) => { if (o.isMesh && o.userData.bim) o.userData.bim = { ...o.userData.bim, trustNote: o.userData.bim.trustNote + ' · clonada para ' + inst.id }; });
+      this.group.add(g); this.instances.push({ ...inst, group: g });
+      if (this.shell) {
+        const sh = this.shell.clone(true); sh.name = 'Envolvente ' + inst.id; sh.position.set(inst.dx, 0, inst.dz);
+        const x0 = u.x0 + inst.dx, x1 = u.x1 + inst.dx, z0 = -13.3 + inst.dz, z1 = -3.4 + inst.dz;
+        const planes = [new THREE.Plane(new THREE.Vector3(1, 0, 0), -x0), new THREE.Plane(new THREE.Vector3(-1, 0, 0), x1), new THREE.Plane(new THREE.Vector3(0, 0, 1), -z0), new THREE.Plane(new THREE.Vector3(0, 0, -1), z1)];
+        sh.traverse((o) => {
+          if (!o.isMesh) return;
+          const m = o.material.clone(); m.clippingPlanes = planes; m.clipIntersection = false; o.material = m;
+        });
+        this.group.add(sh); this.shellClones.push(sh);
+      }
+    }
+  }
+
+  /** Las luces se crean una sola vez (para la 215/216); al recorrer una habitación clonada se desplazan a ella. */
+  focusRoom(id) {
+    const inst = this.instances.find((i) => i.id === id);
+    const dx = inst ? inst.dx : 0, dz = inst ? inst.dz : 0;
+    if (!this.lights) return [0, 0];
+    const moved = this.lights.position.x !== dx || this.lights.position.z !== dz;
+    this.lights.position.set(dx, 0, dz);
+    if (moved && this._renderer) this._renderer.shadowMap.needsUpdate = true;
+    return [dx, dz];
   }
 
   /** Agrupa los vértices de una malla en islas (celdas de 0.2 m conectadas) → cajas en coordenadas de mundo. */
@@ -329,8 +375,8 @@ export class RevitRoomFurniture {
     this.mirrors = new THREE.Group(); this.mirrors.name = 'Espejos'; this.mirrors.visible = false;
     const c = new THREE.Vector3(), s = new THREE.Vector3(), lc = new THREE.Vector3();
     const res = 512;
-    const centers = Object.values(this.layers).map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
-    [...Object.values(this.layers), ...(this.shell ? [this.shell] : [])].forEach((layer) => {
+    const centers = [...Object.values(this.layers), ...this.instances.map((i) => i.group)].map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
+    [...Object.values(this.layers), ...this.instances.map((i) => i.group), ...(this.shell ? [this.shell] : [])].forEach((layer) => {
       const mirrors = [];
       layer.traverse((o) => { if (o.isMesh && /ESPEJO/.test((o.material.name || '').toUpperCase())) mirrors.push(o); });
       mirrors.forEach((o) => this._islands(o, 0.3).forEach((box) => {
@@ -354,7 +400,10 @@ export class RevitRoomFurniture {
 
   /** Modo habitación (recorrido): enciende las luces de interior y los espejos. */
   setInterior(on) { this.lights.visible = on; if (this.mirrors) this.mirrors.visible = on; }
-  setLayer(id, visible) { if (this.layers[id]) this.layers[id].visible = visible; }
+  setLayer(id, visible) {
+    if (this.layers[id]) this.layers[id].visible = visible;
+    this.instances.filter((i) => i.from === id).forEach((i) => { i.group.visible = visible; });
+  }
 
-  static roomsCovered() { return ROOM_LAYERS.map((L) => L.room); }
+  static roomsCovered() { return [...ROOM_LAYERS.map((L) => L.room), ...ROOM_INSTANCES.map((i) => i.id)]; }
 }

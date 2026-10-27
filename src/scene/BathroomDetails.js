@@ -22,6 +22,9 @@ export const BATH_DETAILS = {
   }
 };
 
+// 217 = 215 desplazada (verificado con los polígonos de Revit)
+export const BATH_INSTANCES = { 'HAB-217': { from: 'HAB-215', dx: 7.026, dz: -0.002 } };
+
 function metricUV(geo, w, h, d) {
   const uv = geo.attributes.uv, sizes = [[d, h], [d, h], [w, d], [w, d], [w, h], [w, h]];
   for (let f = 0; f < 6; f++) for (let k = 0; k < 4; k++) { const i = f * 4 + k; uv.setXY(i, uv.getX(i) * sizes[f][0], uv.getY(i) * sizes[f][1]); }
@@ -39,14 +42,18 @@ export function buildBathroomDetails(lib, parent, rooms) {
   const glass = new THREE.MeshStandardMaterial({ color: 0xdfe5e8, roughness: 0.03, metalness: 1 });
   const cream = new THREE.MeshStandardMaterial({ color: 0xd9cdb9, roughness: 0.5, metalness: 0.05 });
 
+  let cur = group;   // subgrupo de la habitación en curso
+  const subs = {};
+  const lights = new THREE.Group(); lights.name = 'LucesBaño';
   const add = (geo, mat, x, y, z, ry = 0) => {
     const m = new THREE.Mesh(geo, mat); m.position.set(x, P2 + y, z); m.rotation.y = ry;
-    m.castShadow = m.receiveShadow = true; group.add(m); return m;
+    m.castShadow = m.receiveShadow = true; cur.add(m); return m;
   };
   const box = (w, h, d, mat, x, y, z, ry = 0) => { const g = new THREE.BoxGeometry(w, h, d); metricUV(g, w, h, d); return add(g, mat, x, y, z, ry); };
 
   for (const [id, c] of Object.entries(BATH_DETAILS)) {
     if (!ids.has(id)) continue;
+    cur = new THREE.Group(); cur.name = 'Baño ' + id; group.add(cur); subs[id] = cur;
     // 1. espejo con marco LED (la luz se ve alrededor, retroiluminado)
     {
       const m = c.mirror, w = m.x1 - m.x0, h = m.y1 - m.y0, cx = (m.x0 + m.x1) / 2, cy = (m.y0 + m.y1) / 2, z = c.wallZ - 0.012, t = 0.022;
@@ -83,8 +90,8 @@ export function buildBathroomDetails(lib, parent, rooms) {
     }
     // 0. luz del baño: downlights del cielo y luz del espejo (solo 2 luces: cada una pesa en cada píxel)
     {
-      const l1 = new THREE.PointLight(0xffe0b4, 2.2, 5.5, 1.6); l1.position.set(-2.8, P2 + 2.3, -11.2); group.add(l1);
-      const l2 = new THREE.PointLight(0xfff0d8, 0.9, 3.0, 2); l2.position.set(-2.45, P2 + 1.5, -10.7); group.add(l2);
+      const l1 = new THREE.PointLight(0xffe0b4, 2.2, 5.5, 1.6); l1.position.set(-2.8, P2 + 2.3, -11.2); lights.add(l1);
+      const l2 = new THREE.PointLight(0xfff0d8, 0.9, 3.0, 2); l2.position.set(-2.45, P2 + 1.5, -10.7); lights.add(l2);
     }
     // 4. barra cromada con dos toallas colgadas, junto al espejo
     {
@@ -95,6 +102,13 @@ export function buildBathroomDetails(lib, parent, rooms) {
       box(0.13, 0.55, 0.018, towelB, b.x + 0.075, b.y - 0.255, z - 0.012);
     }
   }
+  // habitaciones con la misma forma: copia del baño desplazada (las luces no se copian: se mueven con la habitación en uso)
+  for (const [id, inst] of Object.entries(BATH_INSTANCES)) {
+    if (!ids.has(id) || !subs[inst.from]) continue;
+    const copy = subs[inst.from].clone(true); copy.name = 'Baño ' + id; copy.position.set(inst.dx, 0, inst.dz); group.add(copy);
+  }
+  if (lights.children.length) group.add(lights);
+  group.userData.lights = lights;
   if (group.children.length) parent.add(group);
   return group;
 }
