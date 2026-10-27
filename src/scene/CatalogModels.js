@@ -118,12 +118,11 @@ function lamparaMesa(lib) {
   const lamp = std(lib, 'laton_luz', { color: 0xb9a36a, roughness: 0.38, metalness: 0.85, emissive: 0xffe2b0, emissiveIntensity: 0.15 });
   add(g, lathe([[0, 0], [0.07, 0], [0.07, 0.012], [0, 0.012]], 48, 0.44), brass, 0.0, 0);
   const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(0.04, 0.012, 0), new THREE.Vector3(0.04, 0.22, 0), new THREE.Vector3(0.045, 0.36, 0),
-    new THREE.Vector3(0.0, 0.43, 0), new THREE.Vector3(-0.06, 0.44, 0), new THREE.Vector3(-0.11, 0.425, 0)
-  ]);
-  add(g, new THREE.TubeGeometry(curve, 48, 0.009, 12), brass);
-  const head = add(g, new THREE.CylinderGeometry(0.016, 0.016, 0.075, 24), lamp, -0.115, 0.39, 0);
-  head.rotation.z = 0;
+    new THREE.Vector3(0.034, 0.012, 0), new THREE.Vector3(0.06, 0.2, 0), new THREE.Vector3(0.082, 0.34, 0),
+    new THREE.Vector3(0.09, 0.385, 0), new THREE.Vector3(0.07, 0.41, 0), new THREE.Vector3(0.0, 0.43, 0), new THREE.Vector3(-0.14, 0.455, 0)
+  ], false, 'centripetal');
+  add(g, new THREE.TubeGeometry(curve, 64, 0.0045, 12), brass);
+  add(g, lathe([[0, 0], [0.012, 0], [0.008, 0.125], [0, 0.125]], 24, 0.07), lamp, -0.14, 0.34);
   return g;
 }
 
