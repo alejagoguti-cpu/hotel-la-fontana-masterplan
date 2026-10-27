@@ -140,7 +140,7 @@ function lamparaPiso(lib) {
 }
 
 export const CATALOG_MODELS = {
-  'MA-01': { build: mesaNoche, dims: 'ø 40 cm × H 60 cm' },
+  'MA-01': { build: mesaNoche, dims: 'ø 40 cm × H 60 cm', inRoom: true },
   'M-01': { build: mesaCentro, dims: 'ø 80 cm × H 75 cm' },
   'MA-02': { build: mesaAuxiliar, dims: 'ø 40 cm × H 50 cm' },
   'TA-01': { build: tapeteRedondo, dims: 'ø 250 cm' },
@@ -148,7 +148,8 @@ export const CATALOG_MODELS = {
   'LP-02': { build: lamparaPiso, dims: 'ø 23 cm × H 135 cm' }
 };
 
-export function customModel(code, lib) {
+/** Solo MA-01 está validado para colocarse en los cuartos; los demás se ven en el catálogo hasta verificar su ubicación/orientación contra Revit. */
+export function customModel(code, lib, forRoom = false) {
   const c = CATALOG_MODELS[code];
-  return c ? c.build(lib) : null;
+  return c && (!forRoom || c.inRoom) ? c.build(lib) : null;
 }

@@ -270,7 +270,7 @@ export class MaterialLibrary {
 
     // Acabados interiores con texturas fotográficas reales (iguales a los renders de referencia)
     this.materials.set('REF01', this.realMaterial('piso_madera', 2.0, { roughness: 0.9, normalScale: 0.8 }));
-    this.materials.set('NOGAL', this.realMaterial('nogal', 1.4, { roughness: 0.85, normalScale: 0.6 }));
+    this.materials.set('NOGAL', this.realMaterial('sikuani', 1.0, { roughness: 0.85, normalScale: 0.6 }));
     this.materials.set('WALL_TESSERA', this.realMaterial('papel_tessera', 0.9, { roughness: 1, normalScale: 1.1, polygonOffset: true }));
     this.materials.set('WALL_LISMORE', this.realMaterial('roble_claro', 1.2, { roughness: 0.9, normalScale: 0.6, polygonOffset: true }));
     this.materials.set('WALL_PAINT', new THREE.MeshStandardMaterial({ color: 0xece4d6, roughness: 0.92, metalness: 0 }));

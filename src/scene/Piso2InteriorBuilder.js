@@ -299,7 +299,7 @@ export class Piso2InteriorBuilder {
         // modelos 1:1 de la matriz de amoblamiento (CatalogModels) en la posición del Revit; el resto, la geometría de Revit
         const baseCode = (item.code || '').replace(/\s*\[.*\]/, '');
         const rev = (item.prims || []).find((p) => p.t === 'rev');
-        const custom = rev ? customModel(baseCode, this.materials) : null;
+        const custom = rev ? customModel(baseCode, this.materials, true) : null;
         if (custom) {
           custom.position.set(rev.c[0] * MM_TO_M, PISO2_Y, -rev.c[1] * MM_TO_M);
           const yaw = footDir.get(col.groupName + '|' + ((/\[(\w+)\]/.exec(item.code || '') || [])[1] || '-'));
