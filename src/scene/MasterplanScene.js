@@ -12,7 +12,7 @@ import { FloorTour } from './FloorTour.js';
 import { NetworksLayer } from './NetworksLayer.js';
 import { batchStatic, snapshotMatrices, movingSince } from './StaticBatcher.js';
 import { applyWind, windUniforms } from './Wind.js';
-import { RevitRoomFurniture } from './RevitRoomFurniture.js';
+import { RevitRoomFurniture, ROOM_INSTANCES } from './RevitRoomFurniture.js';
 
 export class MasterplanScene {
   constructor(container) {
@@ -177,15 +177,20 @@ export class MasterplanScene {
   _useRevitFurniture(rooms) {
     const covered = RevitRoomFurniture.roomsCovered();
     const list = Array.isArray(rooms) ? rooms : (rooms?.rooms || []);
-    const boxes = list.filter((r) => covered.includes(r.id) && r.bounds).map((r) => r.bounds);
+    const partial = new Set(ROOM_INSTANCES.filter((i) => i.partial).map((i) => i.id));
+    const boxes = list.filter((r) => covered.includes(r.id) && r.bounds && !partial.has(r.id)).map((r) => r.bounds);
+    // suites: solo la huella del módulo clonado (polígono de la 216 transformado), no toda la habitación
+    const src216 = list.find((r) => r.id === 'HAB-216');
+    const polys = src216?.mainLoop ? ROOM_INSTANCES.filter((i) => i.partial && i.m).map((i) => { const [pa, pb, pc, pd, tx, tz] = i.m; return src216.mainLoop.map(([px, py]) => { const X = px / 1000, Z = -py / 1000; return [pa * X + pb * Z + tx, pc * X + pd * Z + tz]; }); }) : [];
+    const inPoly = (x, z, P) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { if (((P[i][1] > z) !== (P[j][1] > z)) && (x < (P[j][0] - P[i][0]) * (z - P[i][1]) / (P[j][1] - P[i][1]) + P[i][0])) c = !c; } return c; };
     const furn = this.interiorBuilder.categoryGroups?.furniture;
-    if (furn && boxes.length) {
+    if (furn && (boxes.length || polys.length)) {
       const b = new THREE.Box3(), c = new THREE.Vector3();
       furn.children.forEach((item) => {
         b.setFromObject(item); if (b.isEmpty()) return;
         b.getCenter(c);
         const X = c.x * 1000, Y = -c.z * 1000;
-        if (boxes.some((r) => X >= r.minX && X <= r.maxX && Y >= r.minY && Y <= r.maxY)) item.visible = false;
+        if (boxes.some((r) => X >= r.minX && X <= r.maxX && Y >= r.minY && Y <= r.maxY) || polys.some((P) => inPoly(c.x, c.z, P))) item.visible = false;
       });
     }
     const target = this.interiorBuilder.group;

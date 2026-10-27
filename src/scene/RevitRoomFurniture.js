@@ -63,7 +63,14 @@ export const ROOM_INSTANCES = [
   // m = [a, b, c, d, tx, tz] con x' = a·x + b·z + tx ; z' = c·x + d·z + tz (coordenadas de mundo). Sin envolvente clonado: usan el procedural.
   { id: 'HAB-219', from: 'doble', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.8578, 1.6979] },
   { id: 'HAB-220', from: 'sencilla', m: [0.70711, -0.70711, 0.70711, 0.70711, 24.9673, 1.8084] },
-  { id: 'HAB-221', from: 'doble', m: [0.69466, -0.71934, 0.71934, 0.69466, 29.94159, 6.84666] }
+  { id: 'HAB-221', from: 'doble', m: [0.69466, -0.71934, 0.71934, 0.69466, 29.94159, 6.84666] },
+  // suites y esquinas: el módulo de la sencilla (cama king, sofá, consola TV) encajado en la habitación; 'partial' = solo se oculta el
+  // mobiliario procedural dentro de la huella del módulo (la sala y el comedor de las suites se conservan). Solape 92–100 %.
+  { id: 'HAB-214', from: 'sencilla', partial: true, m: [-1, 0, 0, 1, -4.6863, 0.0633] },
+  { id: 'HAB-222', from: 'sencilla', partial: true, m: [-0.6691, 0.7431, 0.7431, 0.6691, 48.9839, 9.5411] },
+  { id: 'HAB-223', from: 'sencilla', partial: true, m: [0.2588, -0.9659, 0.9659, 0.2588, 24.6622, 6.232] },
+  { id: 'HAB-224', from: 'sencilla', partial: true, m: [0.866, -0.5, 0.5, 0.866, 29.2003, 16.5057] },
+  { id: 'HAB-225', from: 'sencilla', partial: true, m: [-0.4067, -0.9135, -0.9135, 0.4067, 31.8433, 17.1028] }
 ];
 
 const _tl = new THREE.TextureLoader();
