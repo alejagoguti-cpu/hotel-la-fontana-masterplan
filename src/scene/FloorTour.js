@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { store } from '../state/store.js';
 import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
 import { RoomDoors } from './RoomDoors.js';
+import { buildBathroomDetails } from './BathroomDetails.js';
 
 /**
  * FloorTour — Experiencia "Piso 2" tipo sitio de desarrolladora:
@@ -231,6 +232,7 @@ export class FloorTour {
     }
     this._buildCornices();
     try { this.doors = new RoomDoors(this.app, this); this.group.add(this.doors.build(this.app.materials, this.rooms)); this.doors.attach(); } catch (e) { console.warn('puertas', e); }
+    try { buildBathroomDetails(this.app.materials, this.group, this.rooms); } catch (e) { console.warn('baño', e); }
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
@@ -498,6 +500,7 @@ export class FloorTour {
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
     R.toneMappingExposure = on ? this._baseExposure * 0.95 : this._baseExposure;
+    if (on) { try { this.doors?.applyCarve(); } catch (e) { console.warn("hueco puertas", e); } }
     if (on) this.look?.enable(r || this.current); else this.look?.disable();
     this.app.revitFurniture?.setInterior(on);
     this.app.postfx?.setInterior?.(on);
