@@ -39,7 +39,7 @@ const TEX = {
   'HLF-REF 03 PAPEL COLGADURA TESSERA 1071.27 VESCOM': ['real/papel_tessera', 0.9, 0xffffff, 1, 1.1],
   'HLF-REF 07 PAPEL COLGADURA LISMORE 1097.28 VESCOM': ['real/roble_claro', 1.2, 0xffffff, 0.9, 0.6],
   'HLF-REF 08 CABECERO MELAMINA SIKUANI': ['real/nogal', 1.4, 0xffffff, 0.85, 0.6],
-  'HLF-REF 09 PORCELANATO SANTORINI GREY 120x120': ['real/piedra_arena', 1.2, 0xffffff, 0.55, 1.2],
+  'HLF-REF 09 PORCELANATO SANTORINI GREY 120x120': ['real/piedra_arena', 1.2, 0xffffff, 0.6, 0.45],
   'HLF-TAPETE TA-01': ['real/tapete_lana', 0.4, 0xffffff, 1, 0.9],
   'HLF-TAPETE TA-02': ['real/tapete_puntos', 0.55, 0xffffff, 1, 0.9],
   'HLF-HALL ALFOMBRA TWEED': ['real/alfombra_hall', 1.6, 0xffffff, 1, 0.9]

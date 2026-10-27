@@ -12,7 +12,8 @@ import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUnifo
  * Todas las luces se crean una sola vez (intensidad 0 fuera del recorrido) para no obligar a la GPU
  * a recompilar los materiales al entrar a una habitación.
  */
-const FABRICS = ['TAPIZ', 'OLIVA', 'AVENA', 'TERRACOTA', 'QUILT', 'LINO', 'LENCERIA'];
+// las telas con textura real ya traen su propio relieve; el ruido procedural solo se aplica al quilt y al lino
+const FABRICS = ['QUILT', 'LINO'];
 const SOLIDS = ['REF01', 'REF02', 'REF09', 'HALL_MARMOL', 'MARMOL', 'NOGAL', 'WALL_LISMORE', 'WALL_PAINT'];
 const METALS = ['ACERO', 'ORO', 'CROMO'];
 

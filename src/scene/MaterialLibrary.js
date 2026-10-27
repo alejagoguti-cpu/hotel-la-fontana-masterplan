@@ -343,6 +343,20 @@ export class MaterialLibrary {
       roughness: 0.82
     }));
 
+    // Acabados calibrados contra los renders de referencia (mismas texturas que los GLB de Revit):
+    // telas taupe / avena / oliva / rosa-salmón, sábanas de trama fina, tapetes, alfombra de pasillo y piedra del baño.
+    this.materials.set('TAPIZ', this.realMaterial('boucle_taupe', 0.45, { roughness: 1, normalScale: 1 }));
+    this.materials.set('AVENA', this.realMaterial('tejido_avena', 0.45, { roughness: 1, normalScale: 1 }));
+    this.materials.set('OLIVA', this.realMaterial('tejido_oliva', 0.45, { roughness: 1, normalScale: 1 }));
+    this.materials.set('TERRACOTA', this.realMaterial('tejido_terracota', 0.45, { roughness: 1, normalScale: 1 }));
+    this.materials.set('LENCERIA', this.realMaterial('cama_blanca', 0.5, { roughness: 1, normalScale: 0.35, color: 0xf4efe6 }));
+    this.materials.set('HALL_ALFOMBRA', this.realMaterial('alfombra_hall', 1.6, { roughness: 1, normalScale: 0.9 }));
+    this.materials.set('TA01', this.realMaterial('tapete_lana', 0.4, { roughness: 1, normalScale: 0.9 }));
+    this.materials.set('TA02', this.realMaterial('tapete_puntos', 0.55, { roughness: 1, normalScale: 0.9 }));
+    this.materials.set('TA04', this.realMaterial('tapete_puntos', 0.55, { roughness: 1, normalScale: 0.9 }));
+    this.materials.set('REF09', this.realMaterial('piedra_arena', 1.2, { roughness: 0.6, normalScale: 0.45 }));
+    this.materials.set('REF28', this.realMaterial('piedra_arena', 1.2, { roughness: 0.6, normalScale: 0.45 }));
+
     this.materials.set('ACERO', new THREE.MeshStandardMaterial({
       color: 0x222428,
       roughness: 0.35,
