@@ -82,7 +82,7 @@ export class WindowEditor {
     this.toggleBtn.className = 'mode-pill-btn';
     this.toggleBtn.style.cssText = 'background: rgba(38,40,44,0.76); border:1px solid rgba(255,255,255,0.18); color:#fff;';
     this.toggleBtn.title = 'Poner y quitar ventanas en las fachadas';
-    this.toggleBtn.textContent = '🪟 Ventanas';
+    this.toggleBtn.innerHTML = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1"/><path d="M12 3v18M4 12h16"/></svg> Ventanas';
     bar?.insertBefore(this.toggleBtn, bar.firstChild);
 
     const p = document.createElement('div');

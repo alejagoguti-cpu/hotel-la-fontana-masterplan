@@ -206,7 +206,8 @@ export class Piso2InteriorBuilder {
       const thick = Math.max((thickMm || 120) * MM_TO_M, 0.08);
       const wallHeight = 2.42; // Cutaway height so interior rooms are clearly visible from above
       const geo = new THREE.BoxGeometry(len, wallHeight, thick);
-      const isBrick = (thickMm || 0) >= 150 || (typeName && (typeName.includes('MAMPOSTERIA') || typeName.includes('EXISTENTE') || typeName.includes('LADRILLO')));
+      // por dentro los muros van pintados / con papel: el ladrillo a la vista solo en fachada
+      const isBrick = false; // dentro de las habitaciones nunca se ve ladrillo (la fachada exterior es otro modelo)
       if (isBrick) applyArchitecturalBrickUVs(geo, 1.35, 1.35);
       const mat = isBrick ? this.materials.get('BRICK_FACADE') : this.materials.get('WALL_PAINT');
       const mesh = new THREE.Mesh(geo, mat);

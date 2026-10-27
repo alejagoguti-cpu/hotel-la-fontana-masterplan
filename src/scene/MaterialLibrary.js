@@ -26,6 +26,22 @@ export class MaterialLibrary {
     return tex;
   }
 
+  /** Material interior "de render": textura fotográfica real (Poly Haven CC0, recoloreada a la paleta
+   *  del proyecto) + mapa normal + rugosidad. `meters` = tamaño real de una repetición (UV en metros). */
+  realMaterial(name, meters, { roughness = 1, normalScale = 1, envMapIntensity = 0.45, color = 0xffffff, polygonOffset = false } = {}) {
+    const base = './assets/textures/real/' + name;
+    const rep = 1 / meters;
+    const m = new THREE.MeshStandardMaterial({
+      map: this.getTexture(base + '.webp', rep, rep, true),
+      normalMap: this.getTexture(base + '_n.webp', rep, rep, false),
+      roughnessMap: this.getTexture(base + '_r.webp', rep, rep, false),
+      roughness, metalness: 0, color, envMapIntensity
+    });
+    m.normalScale = new THREE.Vector2(normalScale, normalScale);
+    if (polygonOffset) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -1; }
+    return m;
+  }
+
   initAll() {
     // 1. Exterior Brick Facade (Iconic Hotel Estelar La Fontana Bogotá red brick - 1:1 Revit material)
     const brickMap = this.getTexture('./assets/textures/hlf_ladrillo.png', 1.0, 1.0, true);
@@ -251,6 +267,14 @@ export class MaterialLibrary {
       roughness: 0.86,
       metalness: 0.0
     }));
+
+    // Acabados interiores con texturas fotográficas reales (iguales a los renders de referencia)
+    this.materials.set('REF01', this.realMaterial('piso_madera', 2.0, { roughness: 0.9, normalScale: 0.8 }));
+    this.materials.set('NOGAL', this.realMaterial('nogal', 1.4, { roughness: 0.85, normalScale: 0.6 }));
+    this.materials.set('WALL_TESSERA', this.realMaterial('papel_tessera', 0.9, { roughness: 1, normalScale: 1.1, polygonOffset: true }));
+    this.materials.set('WALL_LISMORE', this.realMaterial('roble_claro', 1.2, { roughness: 0.9, normalScale: 0.6, polygonOffset: true }));
+    this.materials.set('WALL_PAINT', new THREE.MeshStandardMaterial({ color: 0xece4d6, roughness: 0.92, metalness: 0 }));
+    this.materials.set('CEILING_PAINT', this.realMaterial('cielo', 1.5, { roughness: 1, normalScale: 0.3 }));
 
     // 10. Rugs TA-01, TA-02, TA-04
     const ta01Map = this.getTexture('./assets/textures/hlf_tapete_ta01.png', 1.2, 1.2, true);

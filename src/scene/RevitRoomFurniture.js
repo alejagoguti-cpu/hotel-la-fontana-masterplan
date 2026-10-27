@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/addons/libs/meshopt_decoder.module.js';
 import { RectAreaLightUniformsLib } from 'three/addons/lights/RectAreaLightUniformsLib.js';
+import { Reflector } from 'three/addons/objects/Reflector.js';
 
 /**
  * RevitRoomFurniture — habitaciones "de render" con geometría REAL de Hotel_la_fontana_contexto.rvt:
@@ -18,28 +19,30 @@ const BASE = './assets/models/furniture/';
 // material de Revit → [textura, metros por repetición, tinte, rugosidad, relieve]
 const TEX = {
   // mobiliario
-  'HLF-MOB TAPIZ TRAILBLAZER 32 MARBLE': ['hlf_boucle_taupe.png', 0.5, 0xffffff, 0.95, 1.4],
-  'HLF-MOB LENCERIA BLANCA': ['hlf_tejido_avena.png', 0.9, 0xfbf8f2, 0.97, 0.6],
-  'HLF-MOB MELAMINA SIKUANI': ['hlf_nogal4_v.png', 1.6, 0x9a7a62, 0.48, 0.5],
+  'HLF-MOB TAPIZ TRAILBLAZER 32 MARBLE': ['real/boucle_taupe', 0.45, 0xffffff, 1, 1.0],
+  'HLF-MOB LENCERIA BLANCA': ['real/cama_blanca', 0.5, 0xffffff, 1, 0.35],
+  'HLF-MOB CUERO CAMEL': ['real/cuero_camel', 0.5, 0x6a4c3a, 0.5, 0.5],
+  'HLF-MOB MELAMINA SIKUANI': ['real/nogal', 1.4, 0xffffff, 0.9, 0.6],
   'HLF-MOB QUILT OSCURO': ['hlf_quilt_oscuro.png', 0.45, 0xffffff, 0.8, 1.6],
-  'HLF-MOB TEJIDO AVENA': ['hlf_tejido_avena.png', 0.5, 0xffffff, 0.95, 1.2],
-  'HLF-MOB CORTINA LINO': ['hlf_lino_cortina.png', 1.0, 0xffffff, 0.95, 0.8],
+  'HLF-MOB TEJIDO AVENA': ['real/tejido_avena', 0.45, 0xffffff, 1, 1.0],
+  'HLF-MOB CORTINA LINO': ['real/lino_cortina', 0.8, 0xffffff, 1, 0.8],
   'HLF-MOB MARMOL': ['hlf_marmol.png', 1.2, 0xffffff, 0.22, 0.2],
-  'HLF-MOB TEJIDO TERRACOTA': ['hlf_tejido_terracota.png', 0.5, 0xffffff, 0.95, 1.2],
-  'HLF-MOB TEJIDO OLIVA': ['hlf_tejido_oliva.png', 0.5, 0xffffff, 0.95, 1.2],
-  'HLF-MOB TAPETE TRAZO CAFE': ['hlf_tapete_ta01.png', 2.4, 0xffffff, 0.98, 1.0],
+  'HLF-MOB TEJIDO TERRACOTA': ['real/tejido_terracota', 0.45, 0xffffff, 1, 1.0],
+  'HLF-MOB TEJIDO OLIVA': ['real/tejido_oliva', 0.45, 0xffffff, 1, 1.0],
+  // los trazos del tapete redondo son geometría de la familia: pardo liso, el dibujo lo da el modelo
+  'HLF-MOB TAPETE TRAZO CAFE': ['real/tapete_lana', 0.4, 0x6f5233, 1, 0.8],
   'HLF-MOB PIEDRA SINTERIZADA ALTEA PHANTOM DARK': ['hlf_marmol3.png', 1.2, 0xffffff, 0.3, 0.2],
   // envolvente
-  'HLF-REF 01 PISO VINILICO MADERA': ['hlf_piso_madera.png', 1.4, 0xffffff, 0.42, 0.6],
-  'HLF-REF 01 PISO VINILICO MADERA - VETA 090': ['hlf_piso_madera.png', 1.4, 0xffffff, 0.42, 0.6],
+  'HLF-REF 01 PISO VINILICO MADERA': ['real/piso_madera', 2.0, 0xffffff, 0.9, 0.8],
+  'HLF-REF 01 PISO VINILICO MADERA - VETA 090': ['real/piso_madera', 2.0, 0xffffff, 0.9, 0.8],
   'HLF-REF 02 PORCELANATO MOS THE DREAM 30x30 BLANCO': ['hlf_mosaico2.png', 0.3, 0xffffff, 0.35, 0.8],
-  'HLF-REF 03 PAPEL COLGADURA TESSERA 1071.27 VESCOM': ['hlf_grasscloth.png', 0.9, 0xa8a383, 0.92, 1.4],
-  'HLF-REF 07 PAPEL COLGADURA LISMORE 1097.28 VESCOM': ['hlf_roble_claro_v.png', 1.2, 0xf3e6d2, 0.7, 0.8],
-  'HLF-REF 08 CABECERO MELAMINA SIKUANI': ['hlf_nogal4_v.png', 1.8, 0x9a7a62, 0.45, 0.5],
-  'HLF-REF 09 PORCELANATO SANTORINI GREY 120x120': ['hlf_piedra_grey.png', 1.2, 0xffffff, 0.4, 0.3],
-  'HLF-TAPETE TA-01': ['hlf_tapete_ta01.png', 2.4, 0xffffff, 0.98, 1.0],
-  'HLF-TAPETE TA-02': ['hlf_tapete_ta02.png', 2.4, 0xffffff, 0.98, 1.0],
-  'HLF-HALL ALFOMBRA TWEED': ['hlf_alfombra_hall.jpg', 1.5, 0xffffff, 0.98, 1.0]
+  'HLF-REF 03 PAPEL COLGADURA TESSERA 1071.27 VESCOM': ['real/papel_tessera', 0.9, 0xffffff, 1, 1.1],
+  'HLF-REF 07 PAPEL COLGADURA LISMORE 1097.28 VESCOM': ['real/roble_claro', 1.2, 0xffffff, 0.9, 0.6],
+  'HLF-REF 08 CABECERO MELAMINA SIKUANI': ['real/nogal', 1.4, 0xffffff, 0.85, 0.6],
+  'HLF-REF 09 PORCELANATO SANTORINI GREY 120x120': ['real/piedra_arena', 1.2, 0xffffff, 0.55, 1.2],
+  'HLF-TAPETE TA-01': ['real/tapete_lana', 0.4, 0xffffff, 1, 0.9],
+  'HLF-TAPETE TA-02': ['real/tapete_puntos', 0.55, 0xffffff, 1, 0.9],
+  'HLF-HALL ALFOMBRA TWEED': ['real/alfombra_hall', 1.6, 0xffffff, 1, 0.9]
 };
 
 export const ROOM_LAYERS = [
@@ -51,6 +54,7 @@ const SHELL = { file: 'shell.glb', rooms: ['HAB-215', 'HAB-216'] };
 const _tl = new THREE.TextureLoader();
 const _texCache = new Map();
 const _nrmCache = new Map();
+const _roughCache = new Map();
 
 /** Mapa normal a partir de la luminancia de la textura (Sobel): da relieve real a veta, tejido y trama. */
 function normalFromImage(img, strength) {
@@ -78,6 +82,16 @@ function normalFromImage(img, strength) {
 }
 
 function loadTex(file, aniso) {
+  if (file.startsWith('real/') && !_texCache.has(file)) {
+    // juego fotográfico real: color + normal + rugosidad ya horneados (webp)
+    const mk = (suf, srgb) => {
+      const t = _tl.load(`./assets/textures/${file}${suf}.webp`);
+      t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = aniso;
+      if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+      return t;
+    };
+    _texCache.set(file, mk('', true)); _nrmCache.set(file, mk('_n', false)); _roughCache.set(file, mk('_r', false));
+  }
   if (!_texCache.has(file)) {
     const t = _tl.load(`./assets/textures/${file}`, (tt) => {
       const n = _nrmCache.get(file);
@@ -90,7 +104,7 @@ function loadTex(file, aniso) {
     const n = new THREE.Texture(); n.wrapS = n.wrapT = THREE.RepeatWrapping; n.anisotropy = aniso;
     _nrmCache.set(file, n);
   }
-  return { map: _texCache.get(file), normal: _nrmCache.get(file) };
+  return { map: _texCache.get(file), normal: _nrmCache.get(file), rough: _roughCache.get(file) };
 }
 
 /** Material "de render": PBR físico con textura, relieve, brillo y emisión según el material de Revit. */
@@ -102,19 +116,24 @@ function upgradeMaterial(src, aniso, isShell) {
   const spec = TEX[m.name];
   if (spec) {
     const [file, meters, tint, rough, relief] = spec;
-    const { map, normal } = loadTex(file, aniso);
+    const { map, normal, rough: roughTex } = loadTex(file, aniso);
     const rep = 0.6 / meters; // los UV del GLB están en (metros / 0.6)
     m.map = map.clone(); m.map.repeat.set(rep, rep); m.map.needsUpdate = true;
     m.normalMap = normal.clone(); m.normalMap.repeat.set(rep, rep); m.normalMap.needsUpdate = true;
+    if (roughTex) { m.roughnessMap = roughTex.clone(); m.roughnessMap.repeat.set(rep, rep); m.roughnessMap.needsUpdate = true; }
     m.normalScale = new THREE.Vector2(relief, relief);
     m.color.set(tint);
     m.roughness = rough;
     m.metalness = 0;
   }
-  if (/TEJIDO|TAPIZ|LENCERIA|QUILT|CORTINA|TAPETE|CUERO|ALFOMBRA/.test(n)) {
-    m.sheen = 0.5; m.sheenRoughness = 0.7; m.sheenColor = new THREE.Color(0xfff6ea);
+  if (/TEJIDO|TAPIZ|QUILT|CORTINA|TAPETE|ALFOMBRA/.test(n)) {
+    m.sheen = 0.3; m.sheenRoughness = 0.8; m.sheenColor = new THREE.Color(0xf3e8d8);
   }
-  if (/MELAMINA|NOGAL|SIKUANI/.test(n)) { m.clearcoat = 0.25; m.clearcoatRoughness = 0.45; }
+  // sábanas y edredón: blanco cálido mate; el brillo de tela (sheen) fuerte los "quemaba" en las almohadas
+  if (/LENCERIA/.test(n)) { m.sheen = 0.12; m.sheenRoughness = 0.9; m.sheenColor = new THREE.Color(0xf3ece0); m.roughness = 1; m.color.set(0xf4efe6); }
+  if (/CUERO/.test(n)) { m.clearcoat = 0.25; m.clearcoatRoughness = 0.45; }
+  if (/PIEDRA CLARA/.test(n)) { m.map = null; m.color.set(0xd9d3c8); m.roughness = 0.45; m.clearcoat = 0.3; m.clearcoatRoughness = 0.3; }
+  if (/MELAMINA|NOGAL|SIKUANI/.test(n)) { m.clearcoat = 0.08; m.clearcoatRoughness = 0.55; } // nogal satinado, poro abierto
   if (/PISO VINILICO/.test(n)) { m.clearcoat = 0.15; m.clearcoatRoughness = 0.35; }
   if (/MARMOL|PIEDRA SINTER/.test(n)) { m.clearcoat = 0.6; m.clearcoatRoughness = 0.12; }
   if (/CROMO/.test(n)) { m.roughness = 0.1; m.metalness = 1; m.color.set(0xe6e8ea); }
@@ -130,6 +149,12 @@ function upgradeMaterial(src, aniso, isShell) {
   // cielos y pinturas: blanco cálido "Sobre las nubes", sin la textura de ladrillo de la plantilla
   if (/CIELO|PINTURA SOBRE LAS NUBES|HLF-BLANCO|MURO EXISTENTE|DEFAULT WALL|MAMPOSTERIA|CONCRET/.test(n)) {
     m.map = null; m.normalMap = null; m.color.set(0xf1e9dd); m.roughness = 0.95;
+    if (/CIELO/.test(n)) { // estuco de cielo raso con micro-relieve
+      const { map, normal, rough: rt } = loadTex('real/cielo', aniso), rep = 0.6 / 1.5;
+      m.map = map.clone(); m.map.repeat.set(rep, rep); m.normalMap = normal.clone(); m.normalMap.repeat.set(rep, rep);
+      m.roughnessMap = rt.clone(); m.roughnessMap.repeat.set(rep, rep); m.normalScale = new THREE.Vector2(0.3, 0.3);
+      m.color.set(0xffffff); m.roughness = 1;
+    }
   }
   if (/VENTANA MARCO/.test(n)) { m.roughness = 0.5; }
   m.envMapIntensity = /CROMO|ORO|ESPEJO|MARMOL|VIDRIO/.test(n) ? 1.0 : 0.45;
@@ -181,6 +206,7 @@ export class RevitRoomFurniture {
       this.group.add(g);
     });
     this._buildLights();
+    this._buildMirrors();
     return this;
   }
 
@@ -227,14 +253,14 @@ export class RevitRoomFurniture {
       if (long > 0.6 && s.y < 0.25) {
         // tira LED horizontal (cabecero, closet, nicho): baña el panel de arriba y el de abajo
         const alongX = s.x >= s.z;
-        const up = new THREE.RectAreaLight(0xffc27a, 2.2, long, 0.1);
+        const up = new THREE.RectAreaLight(0xffc27a, 2.0, long, 0.1);
         up.position.copy(c); up.rotation.set(Math.PI / 2, alongX ? 0 : Math.PI / 2, 0, 'YXZ');
-        const dn = new THREE.RectAreaLight(0xffc98a, 0.9, long, 0.1);
+        const dn = new THREE.RectAreaLight(0xffc98a, 0.8, long, 0.1);
         dn.position.copy(c); dn.rotation.set(-Math.PI / 2, alongX ? 0 : Math.PI / 2, 0, 'YXZ');
         this.lights.add(up, dn);
       } else if (c.y > P2 + 2.0 && long < 0.35) {
         // downlight empotrado: cono cálido de borde suave
-        const sp = new THREE.SpotLight(0xffd3a0, 2.6, 5, Math.PI / 3.4, 1.0, 2);
+        const sp = new THREE.SpotLight(0xffd3a0, 2.3, 5, Math.PI / 3.4, 1.0, 2);
         sp.position.set(c.x, c.y - 0.03, c.z);
         sp.target.position.set(c.x, c.y - 3, c.z);
         if (shadowSpots < 2) {
@@ -252,8 +278,36 @@ export class RevitRoomFurniture {
     console.info(`[interior] luces creadas: ${this.lights.children.length}`);
   }
 
-  /** Modo habitación (recorrido): enciende las luces de interior. */
-  setInterior(on) { this.lights.visible = on; }
+  /** Espejos reales: cada espejo de Revit recibe un plano reflectante (Reflector) en su cara hacia la habitación.
+   *  Solo se renderizan en modo habitación para no gastar GPU en la vista exterior. */
+  _buildMirrors() {
+    this.mirrors = new THREE.Group(); this.mirrors.name = 'Espejos'; this.mirrors.visible = false;
+    const c = new THREE.Vector3(), s = new THREE.Vector3(), lc = new THREE.Vector3();
+    const res = Math.min(1024, Math.round(512 * Math.min(2, window.devicePixelRatio || 1)));
+    const centers = Object.values(this.layers).map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
+    [...Object.values(this.layers), ...(this.shell ? [this.shell] : [])].forEach((layer) => {
+      const mirrors = [];
+      layer.traverse((o) => { if (o.isMesh && /ESPEJO/.test((o.material.name || '').toUpperCase())) mirrors.push(o); });
+      mirrors.forEach((o) => this._islands(o, 0.3).forEach((box) => {
+        box.getCenter(c); box.getSize(s);
+        lc.copy(centers.reduce((a, b) => (a.distanceTo(c) < b.distanceTo(c) ? a : b), centers[0] || c));
+        const thinX = s.x < s.z, w = thinX ? s.z : s.x;
+        if (w < 0.25 || s.y < 0.25) return;
+        const r = new Reflector(new THREE.PlaneGeometry(w - 0.01, s.y - 0.01), { textureWidth: res, textureHeight: Math.round(res * s.y / w), color: 0xc9cdcf, clipBias: 0.003 });
+        // normal hacia el centro de la habitación
+        const sign = thinX ? Math.sign(lc.x - c.x) || 1 : Math.sign(lc.z - c.z) || 1;
+        r.position.copy(c);
+        if (thinX) { r.position.x += sign * (s.x / 2 + 0.002); r.rotation.y = sign * Math.PI / 2; }
+        else { r.position.z += sign * (s.z / 2 + 0.002); r.rotation.y = sign > 0 ? 0 : Math.PI; }
+        this.mirrors.add(r);
+      }));
+    });
+    this.group.add(this.mirrors);
+    console.info(`[interior] espejos: ${this.mirrors.children.length}`);
+  }
+
+  /** Modo habitación (recorrido): enciende las luces de interior y los espejos. */
+  setInterior(on) { this.lights.visible = on; if (this.mirrors) this.mirrors.visible = on; }
   setLayer(id, visible) { if (this.layers[id]) this.layers[id].visible = visible; }
 
   static roomsCovered() { return ROOM_LAYERS.map((L) => L.room); }

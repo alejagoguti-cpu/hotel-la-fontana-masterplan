@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { store } from '../state/store.js';
 import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
 
@@ -172,20 +173,62 @@ export class FloorTour {
     };
   }
 
+  /** Moldura de cielo raso (cornisa escalonada en blanco) en el perímetro de cada habitación. */
+  _buildCornices() {
+    const mat = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.6, metalness: 0 });
+    // perfil escalonado: [alto, fondo] de abajo hacia arriba
+    const steps = [[0.025, 0.035], [0.035, 0.06], [0.05, 0.09]];
+    const geos = [];
+    for (const r of this.rooms) {
+      const poly = r.poly;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [ax, az] = poly[j], [bx, bz] = poly[i];
+        const len = Math.hypot(bx - ax, bz - az);
+        if (len < 0.25) continue;
+        const ux = (bx - ax) / len, uz = (bz - az) / len;
+        let nx = -uz, nz = ux; // normal hacia el interior
+        const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+        if (!pointInPoly(mx + nx * 0.2, mz + nz * 0.2, poly)) { nx = -nx; nz = -nz; }
+        let y = P2 + CEIL - steps.reduce((a, s) => a + s[0], 0);
+        for (const [h, d] of steps) {
+          const g = new THREE.BoxGeometry(len + d * 2, h, d);
+          g.rotateY(-Math.atan2(uz, ux));
+          g.translate(mx + nx * d / 2, y + h / 2, mz + nz * d / 2);
+          geos.push(g); y += h;
+        }
+      }
+    }
+    if (!geos.length) return;
+    const merged = mergeGeometries(geos, false);
+    geos.forEach((g) => g.dispose());
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.receiveShadow = true;
+    this.cornices = mesh;
+    this.group.add(mesh);
+  }
+
   // ------------------------------------------------------- cielo raso, ventanas, luz
   _buildInteriorDressing(arch) {
     const slab = arch?.slabLoops?.[0]?.loops?.[0];
-    if (slab) {
-      const shape = new THREE.Shape(slab.map(([x, y]) => new THREE.Vector2(x / 1000, y / 1000)));
-      const geo = new THREE.ShapeGeometry(shape);
+    // cielo raso: losa principal + el polígono de CADA habitación (las alas no están en la losa 0)
+    const shapes = [];
+    if (slab) shapes.push(new THREE.Shape(slab.map(([x, y]) => new THREE.Vector2(x / 1000, y / 1000))));
+    for (const r of this.rooms) shapes.push(new THREE.Shape(r.poly.map(([x, z]) => new THREE.Vector2(x, -z))));
+    if (shapes.length) {
+      const geo = new THREE.ShapeGeometry(shapes);
       geo.rotateX(-Math.PI / 2);
-      const mat = new THREE.MeshStandardMaterial({ color: 0xf3f0ea, roughness: 0.92, metalness: 0, side: THREE.DoubleSide });
+      // cielo raso en estuco blanco cálido con micro-relieve (como en los renders de referencia)
+      const tl = new THREE.TextureLoader();
+      const ct = (suf, srgb) => { const t = tl.load(`./assets/textures/real/cielo${suf}.webp`); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 1.5, 1 / 1.5); if (srgb) t.colorSpace = THREE.SRGBColorSpace; return t; };
+      const mat = new THREE.MeshStandardMaterial({ map: ct('', true), normalMap: ct('_n'), roughnessMap: ct('_r'), color: 0xffffff, roughness: 1, metalness: 0, side: THREE.DoubleSide });
+      mat.normalScale.set(0.3, 0.3);
       this.ceiling = new THREE.Mesh(geo, mat);
       this.ceiling.position.y = P2 + CEIL;
       this.ceiling.castShadow = true;     // el sol no entra por el techo
       this.ceiling.receiveShadow = false;
       this.group.add(this.ceiling);
     }
+    this._buildCornices();
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
@@ -452,7 +495,7 @@ export class FloorTour {
     this.group.visible = on;
     const R = this.app.renderer;
     if (this._baseExposure == null) this._baseExposure = R.toneMappingExposure;
-    R.toneMappingExposure = on ? this._baseExposure * 0.92 : this._baseExposure;
+    R.toneMappingExposure = on ? this._baseExposure * 0.95 : this._baseExposure;
     if (on) this.look?.enable(r || this.current); else this.look?.disable();
     this.app.revitFurniture?.setInterior(on);
     this.app.postfx?.setInterior?.(on);
@@ -755,6 +798,7 @@ export class FloorTour {
     this._walk(dt);
     // el cielo raso solo aparece al cruzarlo (así el descenso no "choca" contra una losa blanca)
     if (this.ceiling && this.group.visible) this.ceiling.visible = this.app.camera.position.y < P2 + CEIL - 0.03;
+    if (this.cornices && this.ceiling) this.cornices.visible = this.ceiling.visible;
     if (this.badgesOn && this.badgeEls) {
       const rect = this.app.container.getBoundingClientRect();
       for (const b of this.badgeEls) {

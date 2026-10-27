@@ -188,7 +188,7 @@ export class NetworksLayer {
     btn.className = 'mode-pill-btn net-toggle';
     btn.style.cssText = 'background: rgba(38,40,44,0.76); border:1px solid rgba(255,255,255,0.18); color:#fff;';
     btn.title = 'Capa de redes: arquitectura transparente + instalaciones';
-    btn.textContent = '🔧 Redes';
+    btn.innerHTML = '<svg class="ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z"/></svg> Redes';
     btn.onclick = () => this.toggle();
     bar?.insertBefore(btn, bar.firstChild);
     this.btn = btn;

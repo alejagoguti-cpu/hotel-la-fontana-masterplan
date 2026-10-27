@@ -102,7 +102,7 @@ export class InteriorLook {
         grade: fx?.grade ? { c: fx.grade.uniforms.uContrast.value, s: fx.grade.uniforms.uSaturation.value, v: fx.grade.uniforms.uVignette.value, w: fx.grade.uniforms.uWarm.value.clone() } : null
       };
       if (app.hemiLight) app.hemiLight.intensity = this._saved.hemi * 0.35;
-      if (fx?.bloom) { fx.bloom.strength = 0.5; fx.bloom.radius = 0.55; fx.bloom.threshold = 0.86; }
+      if (fx?.bloom) { fx.bloom.strength = 0.28; fx.bloom.radius = 0.5; fx.bloom.threshold = 0.93; }
       if (fx?.grade) {
         const u = fx.grade.uniforms;
         u.uContrast.value = 1.05; u.uSaturation.value = 1.06; u.uVignette.value = 0.22; u.uWarm.value.set(1.04, 1.0, 0.95);
@@ -118,7 +118,7 @@ export class InteriorLook {
       l.width = Math.max(0.8, w.w); l.height = 1.4;
       l.position.set(w.x, 3.02 + 1.6, w.z).addScaledVector(inward, w.t / 2 + 0.06);
       l.lookAt(l.position.clone().add(inward));
-      l.intensity = 5;
+      l.intensity = 4.2;
     });
   }
 
