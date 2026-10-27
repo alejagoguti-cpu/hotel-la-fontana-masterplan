@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { store } from '../state/store.js';
 import { InteriorLook, upgradeInteriorMaterials } from './InteriorLook.js';
+import { buildRoomDoors } from './RoomDoors.js';
 
 /**
  * FloorTour — Experiencia "Piso 2" tipo sitio de desarrolladora:
@@ -229,6 +230,7 @@ export class FloorTour {
       this.group.add(this.ceiling);
     }
     this._buildCornices();
+    try { buildRoomDoors(this.app.materials, this.group, this.rooms); } catch (e) { console.warn('puertas', e); }
     // vanos: luz de día difusa con cortina translúcida (lo que se ve desde dentro)
     const winTex = this._windowTexture();
     const winMat = new THREE.MeshBasicMaterial({ map: winTex, fog: false, toneMapped: true });
