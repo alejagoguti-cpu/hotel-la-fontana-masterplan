@@ -110,7 +110,7 @@ export class InteriorLook {
       }
       // la oclusión ambiental va siempre encendida dentro de la habitación (también en GPUs integradas, con menos muestras):
       // sin ella las telas y la madera "flotan" y se ven de cera
-      if (fx?.ao) { fx.ao.enabled = true; fx.ao.blendIntensity = 0.75; fx.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.3, thickness: 0.8, scale: 1.1, samples: fx.low ? 8 : 14 }); }
+      if (fx?.ao) { fx.ao.enabled = true; fx.ao.blendIntensity = 0.75; fx.ao.updateGtaoMaterial({ radius: 0.5, distanceExponent: 1.3, thickness: 0.8, scale: 1.1, samples: fx.low ? 6 : 12 }); if (fx.low) fx.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 4 }); }
     }
     app.scene.environment = this.roomEnv;
     // ventanas de esta habitación → luz de área orientada hacia adentro

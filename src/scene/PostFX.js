@@ -62,7 +62,7 @@ export class PostFX {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 0.95;
 
-    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: 4 });
+    const rt = new THREE.WebGLRenderTarget(w, h, { type: THREE.HalfFloatType, samples: this.low ? 2 : 4 });
     this.composer = new EffectComposer(renderer, rt);
     this.maxPixelRatio = Math.max(1, Math.min(window.devicePixelRatio, this.low ? 1.25 : (mobile ? 1.5 : 2)));
     this.composer.setPixelRatio(this.maxPixelRatio);
@@ -72,6 +72,7 @@ export class PostFX {
     if (!mobile) {
       this.ao = new GTAOPass(scene, camera, w, h);
       this.ao.output = GTAOPass.OUTPUT.Default;
+      if (this.low) { const ss = this.ao.setSize.bind(this.ao); this.ao.setSize = (aw, ah) => ss(Math.max(1, Math.ceil(aw * 0.5)), Math.max(1, Math.ceil(ah * 0.5))); this.ao.setSize(w, h); }   // GPU integrada: AO a media resolución
       this.ao.blendIntensity = 0.85;
       this.ao.updateGtaoMaterial({ radius: 1.6, distanceExponent: 1.4, thickness: 2.0, scale: 1.0, samples: this.low ? 8 : 12, distanceFallOff: 1.0 });
       this.ao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: this.low ? 6 : 12 });
@@ -80,6 +81,12 @@ export class PostFX {
       this.composer.addPass(this.ao);
     }
 
+    // protección: un solo píxel NaN/Inf en HDR lo esparce el bloom por todo el cuadro (pantalla negra)
+    this.composer.addPass(new ShaderPass({
+      uniforms: { tDiffuse: { value: null } },
+      vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+      fragmentShader: 'uniform sampler2D tDiffuse; varying vec2 vUv; void main(){ vec4 c = texture2D(tDiffuse, vUv); bool bad = any(isnan(c.rgb)) || any(isinf(c.rgb)); gl_FragColor = vec4(bad ? vec3(0.0) : clamp(c.rgb, 0.0, 60.0), c.a); }'
+    }));
     this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.12, 0.4, 0.96);
     this.composer.addPass(this.bloom);
 

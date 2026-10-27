@@ -110,7 +110,9 @@ function loadTex(file, aniso) {
 
 /** Material "de render": PBR físico con textura, relieve, brillo y emisión según el material de Revit. */
 function upgradeMaterial(src, aniso, isShell) {
-  const m = new THREE.MeshPhysicalMaterial();
+  // Physical (clearcoat/sheen) solo donde se nota; el resto Standard: con tantas luces el shader físico trababa las GPUs integradas
+  const phys = /MARMOL|PIEDRA|CUERO|PANTALLA TV|PISO VINILICO|VIDRIO/.test((src.name || '').toUpperCase());
+  const m = phys ? new THREE.MeshPhysicalMaterial() : new THREE.MeshStandardMaterial();
   THREE.MeshStandardMaterial.prototype.copy.call(m, src);
   m.name = src.name;
   const n = (m.name || '').toUpperCase();
@@ -217,9 +219,14 @@ export class RevitRoomFurniture {
         try {
           const g = o.geometry; g.deleteAttribute('normal');
           o.geometry = mergeVertices(g, 0.5); o.geometry.computeVertexNormals();
+          // triángulos degenerados al fusionar vértices dejan normales (0,0,0) → NaN en el shader → el bloom lo esparce por toda la pantalla
+          const na = o.geometry.attributes.normal;
+          for (let i = 0; i < na.count; i++) { const nx = na.getX(i), ny = na.getY(i), nz = na.getZ(i); if (!(nx * nx + ny * ny + nz * nz > 1e-8)) na.setXYZ(i, 0, 1, 0); }
         } catch (e) { /* se conserva la geometría original */ }
       }
       boxProjectUV(o);
+      // lámparas colgantes de Revit (material "default", huevo blanco) y difusores XAL: no existen en los renders; su luz se conserva
+      if (/^(DEFAULT|XAL_)/.test(o.material.name.toUpperCase())) o.visible = false;
       o.castShadow = !o.material.transparent && !/LED/.test(o.material.name.toUpperCase());
       o.receiveShadow = true;
       o.userData.bim = {
@@ -278,7 +285,7 @@ export class RevitRoomFurniture {
   _buildLights() {
     const c = new THREE.Vector3(), s = new THREE.Vector3();
     const P2 = 3.02;
-    let shadowSpots = 0;
+    let shadowSpots = 0, nSpot = 0, nPoint = 0;   // presupuesto de luces: cada luz se evalúa en cada píxel de cada material
     const emitters = [];
     Object.values(this.layers).forEach((layer) => layer.traverse((o) => {
       if (o.isMesh && /LED|XAL_DIFFUSE|PANTALLA LAMPARA/.test(o.material.name.toUpperCase())) emitters.push(o);
@@ -295,16 +302,18 @@ export class RevitRoomFurniture {
         dn.position.copy(c); dn.rotation.set(-Math.PI / 2, alongX ? 0 : Math.PI / 2, 0, 'YXZ');
         this.lights.add(up, dn);
       } else if (c.y > P2 + 2.0 && long < 0.35) {
+        if (nSpot >= 4) return; nSpot++;
         // downlight empotrado: cono cálido de borde suave
         const sp = new THREE.SpotLight(0xffd3a0, 2.3, 5, Math.PI / 3.4, 1.0, 2);
         sp.position.set(c.x, c.y - 0.03, c.z);
         sp.target.position.set(c.x, c.y - 3, c.z);
-        if (shadowSpots < 2) {
-          sp.castShadow = true; sp.shadow.mapSize.set(1024, 1024); sp.shadow.radius = 8;
+        if (shadowSpots < 1) {
+          sp.castShadow = true; sp.shadow.mapSize.set(512, 512); sp.shadow.radius = 8;
           sp.shadow.bias = -0.0005; sp.shadow.normalBias = 0.03; shadowSpots++;
         }
         this.lights.add(sp, sp.target);
       } else if (long < 0.6) {
+        if (!/PANTALLA/.test(o.material.name.toUpperCase()) || nPoint >= 3) return; nPoint++;
         // lámpara de mesa, aplique o colgante: luz puntual cálida y tenue
         const pl = new THREE.PointLight(0xffc583, 0.35, 2.0, 2);
         pl.position.copy(c);
@@ -319,7 +328,7 @@ export class RevitRoomFurniture {
   _buildMirrors() {
     this.mirrors = new THREE.Group(); this.mirrors.name = 'Espejos'; this.mirrors.visible = false;
     const c = new THREE.Vector3(), s = new THREE.Vector3(), lc = new THREE.Vector3();
-    const res = Math.min(1024, Math.round(512 * Math.min(2, window.devicePixelRatio || 1)));
+    const res = 512;
     const centers = Object.values(this.layers).map((l) => new THREE.Box3().setFromObject(l).getCenter(new THREE.Vector3()));
     [...Object.values(this.layers), ...(this.shell ? [this.shell] : [])].forEach((layer) => {
       const mirrors = [];
@@ -335,6 +344,7 @@ export class RevitRoomFurniture {
         r.position.copy(c);
         if (thinX) { r.position.x += sign * (s.x / 2 + 0.002); r.rotation.y = sign * Math.PI / 2; }
         else { r.position.z += sign * (s.z / 2 + 0.002); r.rotation.y = sign > 0 ? 0 : Math.PI; }
+        { let f = 0; const ob = r.onBeforeRender; r.onBeforeRender = function (...args) { if ((f++ & 1) === 0) ob.apply(this, args); }; }   // refleja 1 de cada 2 cuadros
         this.mirrors.add(r);
       }));
     });
